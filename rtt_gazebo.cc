@@ -17,7 +17,8 @@ public:
     RTTGazebo(const std::string& name):
     TaskContext(name),
     world_path("worlds/empty.world"),
-    model_name(name)
+    model_name(name),
+    model_configured(false)
     {
         RTT::log(RTT::Info) << "Creating " << name <<" with gazebo embedded !" << RTT::endlog();
         this->addProperty("world_path",world_path).doc("The path to the .world file.");
@@ -117,7 +118,8 @@ public:
             if(jit->GetLowerLimit(0u) == jit->GetUpperLimit(0u))
             {
                 RTT::log(RTT::Warning)<<"Not adding (fake) fixed joint ["<<name<<"] idx:"<<idx<<RTT::endlog();
-                continue;
+                idx++;
+		continue;
             }
             joint_idx.push_back(idx);
             joint_names.push_back(name);
