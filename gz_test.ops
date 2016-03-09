@@ -1,14 +1,13 @@
 #!/usr/bin/env deployer
 
 require("os")
-//import("rtt_ros")
 import("rtt_rospack")
 import("rtt_gazebo_embedded")
 
 loadComponent("lwr","RTTGazebo")
 setActivity("lwr",0.1,10,ORO_SCHED_OTHER)
 
-lwr.argv = os.argv()
+lwr.argv = strings("--verbose")
 lwr.world_path = ros.find("rtt_lwr_sim")+"/launch/lwr.world"
 lwr.add_plugin("libgazebo_ros_paths_plugin.so")
 lwr.add_plugin("libgazebo_ros_api_plugin.so")
