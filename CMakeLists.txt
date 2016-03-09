@@ -2,15 +2,18 @@ cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 
 project(rtt_gazebo_embedded CXX)
 
+set(CMAKE_BUILD_TYPE ReleaseWithDebugInfo)
+
 find_package(catkin REQUIRED COMPONENTS
   rtt_ros
-  gazebo_ros
   cmake_modules
   )
 
 find_package(gazebo REQUIRED)
 find_package(OROCOS-RTT REQUIRED)
 find_package(Eigen REQUIRED)
+
+orocos_use_package(rtt_roscomm)
 
 include_directories(
     ${GAZEBO_INCLUDE_DIRS}
