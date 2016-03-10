@@ -15,6 +15,8 @@
 #include <kdl/chaindynparam.hpp>
 #include <std_srvs/Empty.h>
 #include <rtt_roscomm/rosservice.h>
+#include <memory>
+#include <thread>
 
 using namespace RTT;
 using namespace RTT::os;
@@ -32,10 +34,9 @@ public:
         RTT::log(RTT::Info) << "Creating " << name <<" with gazebo embedded !" << RTT::endlog();
         this->addProperty("world_path",world_path).doc("The path to the .world file.");
         this->addOperation("add_plugin",&RTTGazebo::addPlugin,this,RTT::OwnThread).doc("The path to a plugin file.");
-        //this->addOperation("gazeboConfigure",&RTTGazebo::gazeboConfigureHookThread,this,RTT::ClientThread).doc("Wait on the model and load it.");
         this->addProperty("argv",argv).doc("argv passed to the deployer's main.");
         this->addProperty("model_name",model_name).doc("The name of the robot.");
-        this->addProperty("iters",iters).doc("The number of iterations to do at each step() of the world.");
+        this->addProperty("run_world_elapsed",run_world_elapsed).doc("Duration of run world");
         this->addOperation("isModelConfigured",&RTTGazebo::isModelConfigured,this,RTT::ClientThread).doc("True if the model has been loaded.");
         this->ports()->addPort("JointPosition", port_joint_position_out).doc("");
         this->ports()->addPort("JointVelocity", port_joint_velocity_out).doc("");
@@ -46,7 +47,7 @@ public:
         this->ports()->addPort("JointTorqueCommand", port_joint_torque_cmd_in).doc("");
         
         this->addOperation("readyROSService",&RTTGazebo::readyROSService,this,RTT::OwnThread).doc("Say everyone the component is ready.");
-
+        
         gazebo::printVersion();
         gazebo::common::Console::SetQuiet(false);
     }
@@ -60,7 +61,10 @@ public:
     }
     void setWorldFilePath(const std::string& file_path)
     {
-        world_path = file_path;
+        if(std::ifstream(file_path))  
+            world_path = file_path;
+        else
+            RTT::log(RTT::Error) << "File "<<file_path<<"does not exists."<<RTT::endlog();
     }
     bool configureHook()
     {
@@ -78,8 +82,11 @@ public:
         if(!gazeboConfigureHookThread())
             return false;
 
-        rtt_rosclock::use_ros_clock_topic();
-        rtt_rosclock::enable_sim();
+        //rtt_rosclock::use_ros_clock_topic();
+        //rtt_rosclock::enable_sim();
+        
+        world_begin =  gazebo::event::Events::ConnectWorldUpdateBegin(boost::bind(&RTTGazebo::writeToSim,this));
+        world_end = gazebo::event::Events::ConnectWorldUpdateEnd(boost::bind(&RTTGazebo::readSim,this));
         
         return true;
     }
@@ -88,18 +95,13 @@ public:
         int n = 20;
         while(n-- > 0)
         {
-
-            gazebo::runWorld(world, iters);
+            gazebo::runWorld(world, 1);
             robot = world->GetModel(model_name);
             if(gazeboConfigureHook(robot))
                 break;
-            //updateROSClock();
             usleep(1E6);
         }
-        //configure_mutex.unlock();
-        if(n>0)
-            return true;
-        return false;
+        return n>0;
     }
     void updateROSClock()
     {
@@ -113,32 +115,8 @@ public:
     }
     void updateHook()
     {
-        /*RTT::log(RTT::Debug) << "Running once at  "<< RTT::os::TimeService::Instance()->getNSecs() << RTT::endlog();
-        RTT::log(RTT::Debug) << "- Sim clock : "<< world->GetSimTime()
-            <<"\n- Real Time : "<<world->GetRealTime()
-            <<"\n- common::Time::GetWallTime() : "<<gazebo::common::Time::GetWallTime()
-            <<"\n- rosclock : "<<rtt_rosclock::host_now()<<RTT::endlog();*/
-
-        readPorts();
-
-        writeToSim();
-
-        // BUG : https://bitbucket.org/osrf/gazebo/issues/1216/getrealtime-resets-with-each-call-to
-        // So I have to modify this runBlocking function manually waiting for this bug to be fixed
-        
-        gazebo::runWorld(world, iters); 
-        
-        if(!robot)
-            robot =  world->GetModel(model_name);
-        
-        if(robot && !model_configured)
-            gazeboConfigureHook(robot);
-
-        readSim();
-        writetoPorts();
-
-        if(0 && model_configured)
-            updateROSClock();
+        gazebo::runWorld(world, 0); // runs forever
+        return;
     }
     void readPorts()
     {
@@ -149,8 +127,13 @@ public:
     }
     void writeToSim()
     {
-        if(!model_configured)
+        ticks_start = RTT::os::TimeService::Instance()->getTicks();
+
+        if(!model_configured) 
             return;
+        
+        readPorts();
+        
         if(port_joint_position_cmd_in.connected() 
             || port_joint_torque_cmd_in.connected())
         {
@@ -181,7 +164,7 @@ public:
         port_joint_velocity_out.write(jnt_vel);
         port_joint_torque_out.write(jnt_trq);
     }
-    bool gazeboConfigureHook(gazebo::physics::ModelPtr model)
+    bool gazeboConfigureHook(const gazebo::physics::ModelPtr& model)
     {
         if(!model) {
             RTT::log(RTT::Warning)<<"Waiting for "<<model_name<<" to be loaded"<<RTT::endlog();
@@ -192,6 +175,9 @@ public:
             return true;
 
         // Get the joints
+        joint_idx.clear();
+        joint_names.clear();
+        
         gazebo_joints = model->GetJoints();
         gazebo_links = model->GetLinks();
 
@@ -248,8 +234,16 @@ public:
         port_joint_torque_out.setDataSample(jnt_trq);
 
         RTT::log(RTT::Info)<<"Creating KDL Chain "<<RTT::endlog();
+        
+        static KDL::Chain chain;
+        static KDL::Tree tree;
+    
         if(!rtt_ros_kdl_tools::initChainFromROSParamURDF(tree,chain))
+        {
+            RTT::log(RTT::Error)<<"Could not create the KDL chain"<<RTT::endlog();
             return false;
+        }
+        
         dyn_param.reset(new KDL::ChainDynParam(chain,KDL::Vector(world->Gravity().X(),
                                                                  world->Gravity().Y(),
                                                                  world->Gravity().Z())));
@@ -275,6 +269,10 @@ public:
             jnt_vel[j] = gazebo_joints[joint_idx[j]]->GetVelocity(0);
             jnt_trq[j] = gazebo_joints[joint_idx[j]]->GetForce(0u);
         }
+        
+        writetoPorts();
+        ticks_stop = RTT::os::TimeService::Instance()->getTicks();
+        run_world_elapsed = RTT::os::TimeService::Instance()->getSeconds(ticks_start);
     }
     virtual ~RTTGazebo(){}
     bool readyROSService(std_srvs::EmptyRequest& req,std_srvs::EmptyResponse& res)
@@ -282,6 +280,8 @@ public:
         return true;
     }
 protected:
+    gazebo::event::ConnectionPtr world_begin;
+    gazebo::event::ConnectionPtr world_end;
     gazebo::physics::WorldPtr world;
     std::string world_path;
     std::vector<std::string> argv;
@@ -296,7 +296,7 @@ protected:
     std::atomic<bool> model_configured;
     unsigned int iters;
     std::string root_link,tip_link,robot_description;
-    boost::thread gz_conf_th;
+    std::thread gz_conf_th;
 
     RTT::FlowStatus jnt_pos_cmd_in_fs,
                     jnt_trq_cmd_in_fs;
@@ -314,10 +314,10 @@ protected:
     Eigen::VectorXd jnt_pos_cmd_in,
                     jnt_vel_cmd_in,
                     jnt_trq_cmd_in;
-    boost::scoped_ptr<KDL::ChainDynParam> dyn_param;
+    std::unique_ptr<KDL::ChainDynParam> dyn_param;
     RTT::os::MutexRecursive configure_mutex;
-    KDL::Chain chain;
-    KDL::Tree tree;
+    RTT::os::TimeService::ticks ticks_start,ticks_stop;
+    double run_world_elapsed;
 };
 
 
