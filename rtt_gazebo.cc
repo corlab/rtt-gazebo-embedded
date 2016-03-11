@@ -14,7 +14,6 @@
 #include <rtt_ros_kdl_tools/tools.hpp>
 #include <kdl/chaindynparam.hpp>
 #include <std_srvs/Empty.h>
-#include <rtt_roscomm/rosservice.h>
 #include <memory>
 #include <thread>
 
@@ -79,14 +78,20 @@ public:
         world = gazebo::loadWorld(world_path);
         if(!world) return false;
                 
-        if(!gazeboConfigureHookThread())
+        /*if(!gazeboConfigureHookThread())
+        {
+            RTT::log(RTT::Fatal) << "Gazebo configure Thread failed" << RTT::endlog();
             return false;
-
+        }*/
+        gz_conf_th = std::thread(std::bind(&RTTGazebo::gazeboConfigureHookThread,this));
+        gz_conf_th.join();
+        
         //rtt_rosclock::use_ros_clock_topic();
         //rtt_rosclock::enable_sim();
         
-        world_begin =  gazebo::event::Events::ConnectWorldUpdateBegin(boost::bind(&RTTGazebo::writeToSim,this));
-        world_end = gazebo::event::Events::ConnectWorldUpdateEnd(boost::bind(&RTTGazebo::readSim,this));
+        RTT::log(RTT::Info) << "Binding world events" << RTT::endlog();
+        world_begin =  gazebo::event::Events::ConnectWorldUpdateBegin(std::bind(&RTTGazebo::writeToSim,this));
+        world_end = gazebo::event::Events::ConnectWorldUpdateEnd(std::bind(&RTTGazebo::readSim,this));
         
         return true;
     }
@@ -98,7 +103,10 @@ public:
             gazebo::runWorld(world, 1);
             robot = world->GetModel(model_name);
             if(gazeboConfigureHook(robot))
-                break;
+            {
+                RTT::log(RTT::Info)<<"Done configuring model "<<RTT::endlog();
+                return true;
+            }
             usleep(1E6);
         }
         return n>0;
@@ -115,6 +123,7 @@ public:
     }
     void updateHook()
     {
+        std::cout <<"\x1B[32m[[--- Gazebo running ---]]\033[0m"<<std::endl;
         gazebo::runWorld(world, 0); // runs forever
         return;
     }
@@ -214,12 +223,34 @@ public:
 
         RTT::log(RTT::Info)<<"Gazebo model found "<<joint_idx.size()<<" joints "<<RTT::endlog();
 
-        jnt_pos.resize(joint_idx.size());
-        jnt_vel.resize(joint_idx.size());
-        jnt_trq.resize(joint_idx.size());
-        jnt_pos_cmd_in.resize(joint_idx.size());
-        jnt_trq_cmd_in.resize(joint_idx.size());
-        jnt_trq_gravity.resize(joint_idx.size());
+        RTT::log(RTT::Info)<<"Creating KDL Chain "<<RTT::endlog();
+        
+        static KDL::Chain chain;
+        static KDL::Tree tree;
+    
+        if(!rtt_ros_kdl_tools::initChainFromROSParamURDF(tree,chain))
+        {
+            RTT::log(RTT::Fatal)<<"Could not create the KDL chain"<<RTT::endlog();
+            return false;
+        }
+        const unsigned int dof = chain.getNrOfJoints();
+        
+        if(dof != joint_idx.size())
+        {
+            RTT::log(RTT::Fatal)<<"Sizes dont match : gazebo("<<joint_idx.size()<<") , kdl("<<dof<<")"<<RTT::endlog();
+            return false;
+        }
+        
+        dyn_param.reset(new KDL::ChainDynParam(chain,KDL::Vector(world->Gravity().X(),
+                                                                 world->Gravity().Y(),
+                                                                 world->Gravity().Z())));
+        
+        jnt_pos.resize(dof);
+        jnt_vel.resize(dof);
+        jnt_trq.resize(dof);
+        jnt_pos_cmd_in.resize(dof);
+        jnt_trq_cmd_in.resize(dof);
+        jnt_trq_gravity.resize(dof);
 
         jnt_pos.data.setZero();
         jnt_vel.setZero();
@@ -232,29 +263,9 @@ public:
         port_joint_position_out.setDataSample(jnt_pos.data);
         port_joint_velocity_out.setDataSample(jnt_vel);
         port_joint_torque_out.setDataSample(jnt_trq);
-
-        RTT::log(RTT::Info)<<"Creating KDL Chain "<<RTT::endlog();
         
-        static KDL::Chain chain;
-        static KDL::Tree tree;
-    
-        if(!rtt_ros_kdl_tools::initChainFromROSParamURDF(tree,chain))
-        {
-            RTT::log(RTT::Error)<<"Could not create the KDL chain"<<RTT::endlog();
-            return false;
-        }
-        
-        dyn_param.reset(new KDL::ChainDynParam(chain,KDL::Vector(world->Gravity().X(),
-                                                                 world->Gravity().Y(),
-                                                                 world->Gravity().Z())));
-
-//         boost::shared_ptr<rtt_rosservice::ROSService> rosservice = this->getProvider<rtt_rosservice::ROSService>("rosservice");
-//         if(rosservice)
-//             rosservice->connect("readyROSService",getName()+"/ready","std_srvs/Empty");
-        //rtt_rosclock::use_manual_clock();
-        //rtt_rosclock::enable_sim();
         model_configured = true;
-        RTT::log(RTT::Info)<<"Done configuring model "<<RTT::endlog();
+        
         return true;
     }
 
