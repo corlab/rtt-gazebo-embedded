@@ -24,9 +24,9 @@ include_directories(
 link_directories(${GAZEBO_LIBRARY_DIRS})
 list(APPEND CMAKE_CXX_FLAGS "${GAZEBO_CXX_FLAGS}")
 
-orocos_component(rtt_gazebo rtt_gazebo.cc)
-target_link_libraries(rtt_gazebo ${GAZEBO_LIBRARIES} pthread ${USE_OROCOS_LIBRARIES})
-set_property(TARGET rtt_gazebo APPEND PROPERTY COMPILE_DEFINITIONS RTT_COMPONENT)
+orocos_component(${PROJECT_NAME} rtt_gazebo_embedded.cc)
+target_link_libraries(${PROJECT_NAME} ${GAZEBO_LIBRARIES} pthread ${USE_OROCOS_LIBRARIES})
+set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY COMPILE_DEFINITIONS RTT_COMPONENT)
 
 orocos_generate_package(
     INCLUDE_DIRS include

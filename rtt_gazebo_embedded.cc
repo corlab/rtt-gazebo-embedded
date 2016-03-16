@@ -154,9 +154,13 @@ public:
             // Set Gravity Mode or specified links
             for(auto& it : gravity_mode)
                         it.first->SetGravityMode(it.second);
-
+            
+            jnt_trq_cmd_out = jnt_trq_cmd_in + jnt_trq_gravity.data;
+                        
+            //std::cout << "T "<<jnt_trq_cmd_out.transpose()<<std::endl;
+           
             for(unsigned j=0; j<joint_idx.size(); j++)
-                gazebo_joints[joint_idx[j]]->SetForce(0,jnt_trq_cmd_in[j] + jnt_trq_gravity.data[j]);
+                gazebo_joints[joint_idx[j]]->SetForce(0,jnt_trq_cmd_out[j]);
         }
         else
         {
@@ -251,7 +255,8 @@ public:
         jnt_pos_cmd_in.resize(dof);
         jnt_trq_cmd_in.resize(dof);
         jnt_trq_gravity.resize(dof);
-
+        jnt_trq_cmd_out.resize(dof);
+        
         jnt_pos.data.setZero();
         jnt_vel.setZero();
         jnt_trq.setZero();
@@ -259,6 +264,7 @@ public:
         jnt_vel_cmd_in.setZero();
         jnt_trq_cmd_in.setZero();
         jnt_trq_gravity.data.setZero();
+        jnt_trq_cmd_out.setZero();
         
         port_joint_position_out.setDataSample(jnt_pos.data);
         port_joint_velocity_out.setDataSample(jnt_vel);
@@ -324,7 +330,9 @@ protected:
                                     port_joint_torque_cmd_in;
     Eigen::VectorXd jnt_pos_cmd_in,
                     jnt_vel_cmd_in,
-                    jnt_trq_cmd_in;
+                    jnt_trq_cmd_in,
+                    jnt_trq_cmd_out;
+                    
     std::unique_ptr<KDL::ChainDynParam> dyn_param;
     RTT::os::MutexRecursive configure_mutex;
     RTT::os::TimeService::ticks ticks_start,ticks_stop;
