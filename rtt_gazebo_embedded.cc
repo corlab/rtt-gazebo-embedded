@@ -6,16 +6,19 @@
 #include <rtt/os/TimeService.hpp>
 #include <rtt/InputPort.hpp>
 #include <rtt/OutputPort.hpp>
+#include <rtt/os/Semaphore.hpp>
 #include <Eigen/Dense>
 #include <rtt_rosclock/rtt_rosclock.h>
 #include <rtt_rosclock/rtt_rosclock_sim_clock_activity.h>
 #include <rtt_rosclock/rtt_rosclock_sim_clock_activity_manager.h>
 #include <rtt_ros_kdl_tools/chain_utils.hpp>
 #include <rtt_ros_kdl_tools/tools.hpp>
+#include <rtt_ros_kdl_tools/chaincogsolver.hpp>
 #include <kdl/chaindynparam.hpp>
 #include <std_srvs/Empty.h>
 #include <memory>
 #include <thread>
+#include <visualization_msgs/Marker.h>
 
 using namespace RTT;
 using namespace RTT::os;
@@ -28,6 +31,8 @@ public:
     world_path("worlds/empty.world"),
     model_name(name),
     iters(1),
+    go_sem(1),
+    model_timeout_s(20.0),
     model_configured(false)
     {
         RTT::log(RTT::Info) << "Creating " << name <<" with gazebo embedded !" << RTT::endlog();
@@ -35,8 +40,12 @@ public:
         this->addOperation("add_plugin",&RTTGazebo::addPlugin,this,RTT::OwnThread).doc("The path to a plugin file.");
         this->addProperty("argv",argv).doc("argv passed to the deployer's main.");
         this->addProperty("model_name",model_name).doc("The name of the robot.");
+        this->addProperty("model_timeout_s",model_timeout_s).doc("Time during which we wait for the model to be spawned.");
         this->addProperty("run_world_elapsed",run_world_elapsed).doc("Duration of run world");
         this->addOperation("isModelConfigured",&RTTGazebo::isModelConfigured,this,RTT::ClientThread).doc("True if the model has been loaded.");
+        
+        this->ports()->addPort("CenterOfGravityMarker", port_cog_marker).doc("");
+        
         this->ports()->addPort("JointPosition", port_joint_position_out).doc("");
         this->ports()->addPort("JointVelocity", port_joint_velocity_out).doc("");
         this->ports()->addPort("JointTorque", port_joint_torque_out).doc("");
@@ -97,9 +106,15 @@ public:
     }
     bool gazeboConfigureHookThread()
     {
-        int n = 20;
-        while(n-- > 0)
+        auto tstart = RTT::os::TimeService::Instance()->getTicks();
+        while(true)
         {
+            auto elapsed = RTT::os::TimeService::Instance()->getSeconds(tstart);
+            if(elapsed > model_timeout_s)
+            {
+                RTT::log(RTT::Error) << "Model timeout" << RTT::endlog();
+                return false;
+            }
             gazebo::runWorld(world, 1);
             robot = world->GetModel(model_name);
             if(gazeboConfigureHook(robot))
@@ -109,7 +124,7 @@ public:
             }
             usleep(1E6);
         }
-        return n>0;
+        return false;
     }
     void updateROSClock()
     {
@@ -121,10 +136,22 @@ public:
     {
         gazebo::shutdown();
     }
-    void updateHook()
+    bool startHook()
+    {
+        if(!run_th.joinable())
+            run_th = std::thread(std::bind(&RTTGazebo::runWorldForever,this));
+        else
+            std::cout <<"\x1B[32m[[--- Gazebo already running ---]]\033[0m"<<std::endl;
+        return true;
+    }
+    void runWorldForever()
     {
         std::cout <<"\x1B[32m[[--- Gazebo running ---]]\033[0m"<<std::endl;
-        gazebo::runWorld(world, 0); // runs forever
+        gazebo::runWorld(world, 0); // runs forever 
+    }
+    void updateHook()
+    {
+        go_sem.signal();
         return;
     }
     void readPorts()
@@ -176,6 +203,13 @@ public:
         port_joint_position_out.write(jnt_pos.data);
         port_joint_velocity_out.write(jnt_vel);
         port_joint_torque_out.write(jnt_trq);
+        
+        
+        static visualization_msgs::Marker marker;
+        static KDL::Vector cog;
+        cog_solver->JntToCoG(jnt_pos,cog);
+        createCoGMarker("",gazebo_links[0]->GetName(),0.1,cog,marker);
+        port_cog_marker.write(marker);
     }
     bool gazeboConfigureHook(const gazebo::physics::ModelPtr& model)
     {
@@ -248,6 +282,7 @@ public:
         dyn_param.reset(new KDL::ChainDynParam(chain,KDL::Vector(world->Gravity().X(),
                                                                  world->Gravity().Y(),
                                                                  world->Gravity().Z())));
+        cog_solver.reset(new KDL::ChainCoGSolver(chain));
         
         jnt_pos.resize(dof);
         jnt_vel.resize(dof);
@@ -273,6 +308,21 @@ public:
         model_configured = true;
         
         return true;
+    }
+    
+    void createCoGMarker(const std::string& ns, const std::string& frame_id, double radius, const KDL::Vector& cog, visualization_msgs::Marker& marker) const{
+        marker.header.frame_id = frame_id;
+        marker.ns = ns;
+        marker.type = visualization_msgs::Marker::SPHERE;
+        marker.action = visualization_msgs::Marker::ADD;
+        marker.pose.position.x = cog.x();
+        marker.pose.position.y = cog.y();
+        marker.pose.position.z = cog.z();
+        marker.scale.x = radius;
+        marker.scale.y = radius;
+        marker.scale.z = radius;
+        marker.color.r = 1.0;
+        marker.color.a = 0.8;
     }
 
     void readSim()
@@ -313,7 +363,7 @@ protected:
     std::atomic<bool> model_configured;
     unsigned int iters;
     std::string root_link,tip_link,robot_description;
-    std::thread gz_conf_th;
+    std::thread gz_conf_th,run_th;
 
     RTT::FlowStatus jnt_pos_cmd_in_fs,
                     jnt_trq_cmd_in_fs;
@@ -334,9 +384,12 @@ protected:
                     jnt_trq_cmd_out;
                     
     std::unique_ptr<KDL::ChainDynParam> dyn_param;
+    std::unique_ptr<KDL::ChainCoGSolver> cog_solver;
+    RTT::OutputPort<visualization_msgs::Marker> port_cog_marker;
     RTT::os::MutexRecursive configure_mutex;
     RTT::os::TimeService::ticks ticks_start,ticks_stop;
-    double run_world_elapsed;
+    double run_world_elapsed,model_timeout_s;
+    RTT::os::Semaphore go_sem;
 };
 
 

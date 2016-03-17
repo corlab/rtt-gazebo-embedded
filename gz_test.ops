@@ -5,8 +5,11 @@ import("rtt_rospack")
 import("rtt_gazebo_embedded")
 import("eigen_typekit")
 
+import("rtt_visualization_msgs")
+import("rtt_roscomm")
+
 loadComponent("lwr_sim","RTTGazebo")
-setActivity("lwr_sim",0,10,ORO_SCHED_OTHER)
+setActivity("lwr_sim",0.1,10,ORO_SCHED_OTHER)
 
 lwr_sim.argv = strings("--verbose","--record_encoding=zlib")
 lwr_sim.world_path = ros.find("rtt_lwr_sim")+"/launch/lwr.world"
@@ -14,6 +17,10 @@ lwr_sim.add_plugin("libgazebo_ros_paths_plugin.so")
 lwr_sim.add_plugin("libgazebo_ros_api_plugin.so")
 
 
+
 lwr_sim.configure()
+
+stream("lwr_sim.CenterOfGravityMarker",ros.comm.topic("cog_marker"))
+
 
 lwr_sim.start()
