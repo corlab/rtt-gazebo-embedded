@@ -19,6 +19,7 @@
 #include <memory>
 #include <thread>
 #include <visualization_msgs/Marker.h>
+#include <rtt/Port.hpp>
 
 using namespace RTT;
 using namespace RTT::os;
@@ -30,12 +31,14 @@ public:
     TaskContext(name),
     world_path("worlds/empty.world"),
     model_name(name),
-    iters(1),
-    go_sem(1),
+    go_sem(0),
     model_timeout_s(20.0),
+    use_rtt_sync(false),
     model_configured(false)
     {
         RTT::log(RTT::Info) << "Creating " << name <<" with gazebo embedded !" << RTT::endlog();
+        this->ports()->addPort("sync",port_sync).doc("Migth be used to trigger your component's updateHook().");
+        this->addProperty("use_rtt_sync",use_rtt_sync).doc("Gazebo ties to run at the component's rate (or slower).");
         this->addProperty("world_path",world_path).doc("The path to the .world file.");
         this->addOperation("add_plugin",&RTTGazebo::addPlugin,this,RTT::OwnThread).doc("The path to a plugin file.");
         this->addProperty("argv",argv).doc("argv passed to the deployer's main.");
@@ -204,6 +207,7 @@ public:
         port_joint_velocity_out.write(jnt_vel);
         port_joint_torque_out.write(jnt_trq);
         
+        port_sync.write(true);
         
         static visualization_msgs::Marker marker;
         static KDL::Vector cog;
@@ -340,6 +344,9 @@ public:
         writetoPorts();
         ticks_stop = RTT::os::TimeService::Instance()->getTicks();
         run_world_elapsed = RTT::os::TimeService::Instance()->getSeconds(ticks_start);
+        
+        if(use_rtt_sync)
+            go_sem.wait();
     }
     virtual ~RTTGazebo(){}
     bool readyROSService(std_srvs::EmptyRequest& req,std_srvs::EmptyResponse& res)
@@ -361,13 +368,12 @@ protected:
     std::map<gazebo::physics::LinkPtr,bool> gravity_mode;
     KDL::JntArray jnt_trq_gravity,jnt_pos;
     std::atomic<bool> model_configured;
-    unsigned int iters;
     std::string root_link,tip_link,robot_description;
     std::thread gz_conf_th,run_th;
 
     RTT::FlowStatus jnt_pos_cmd_in_fs,
                     jnt_trq_cmd_in_fs;
-
+    RTT::OutputPort<bool> port_sync;
     RTT::OutputPort<Eigen::VectorXd> port_joint_position_out,
                                      port_joint_velocity_out,
                                      port_joint_torque_out;
@@ -390,6 +396,7 @@ protected:
     RTT::os::TimeService::ticks ticks_start,ticks_stop;
     double run_world_elapsed,model_timeout_s;
     RTT::os::Semaphore go_sem;
+    bool use_rtt_sync;
 };
 
 
