@@ -46,9 +46,9 @@ public:
         this->addProperty("model_timeout_s",model_timeout_s).doc("Time during which we wait for the model to be spawned.");
         this->addProperty("run_world_elapsed",run_world_elapsed).doc("Duration of run world");
         this->addOperation("isModelConfigured",&RTTGazebo::isModelConfigured,this,RTT::ClientThread).doc("True if the model has been loaded.");
-        
+
         this->ports()->addPort("CenterOfGravityMarker", port_cog_marker).doc("");
-        
+
         this->ports()->addPort("JointPosition", port_joint_position_out).doc("");
         this->ports()->addPort("JointVelocity", port_joint_velocity_out).doc("");
         this->ports()->addPort("JointTorque", port_joint_torque_out).doc("");
@@ -56,9 +56,9 @@ public:
         this->ports()->addPort("JointPositionCommand", port_joint_position_cmd_in).doc("");
         this->ports()->addPort("JointVelocityCommand", port_joint_velocity_cmd_in).doc("");
         this->ports()->addPort("JointTorqueCommand", port_joint_torque_cmd_in).doc("");
-        
+
         this->addOperation("readyROSService",&RTTGazebo::readyROSService,this,RTT::OwnThread).doc("Say everyone the component is ready.");
-        
+
         gazebo::printVersion();
         gazebo::common::Console::SetQuiet(false);
     }
@@ -72,7 +72,7 @@ public:
     }
     void setWorldFilePath(const std::string& file_path)
     {
-        if(std::ifstream(file_path))  
+        if(std::ifstream(file_path))
             world_path = file_path;
         else
             RTT::log(RTT::Error) << "File "<<file_path<<"does not exists."<<RTT::endlog();
@@ -89,7 +89,7 @@ public:
 
         world = gazebo::loadWorld(world_path);
         if(!world) return false;
-                
+
         /*if(!gazeboConfigureHookThread())
         {
             RTT::log(RTT::Fatal) << "Gazebo configure Thread failed" << RTT::endlog();
@@ -97,14 +97,14 @@ public:
         }*/
         gz_conf_th = std::thread(std::bind(&RTTGazebo::gazeboConfigureHookThread,this));
         gz_conf_th.join();
-        
+
         //rtt_rosclock::use_ros_clock_topic();
         //rtt_rosclock::enable_sim();
-        
+
         RTT::log(RTT::Info) << "Binding world events" << RTT::endlog();
         world_begin =  gazebo::event::Events::ConnectWorldUpdateBegin(std::bind(&RTTGazebo::writeToSim,this));
         world_end = gazebo::event::Events::ConnectWorldUpdateEnd(std::bind(&RTTGazebo::readSim,this));
-        
+
         return true;
     }
     bool gazeboConfigureHookThread()
@@ -137,25 +137,39 @@ public:
     }
     void cleanupHook()
     {
-        gazebo::shutdown();
+        std::cout <<"\x1B[32m[[--- Stoping Simulation ---]]\033[0m"<<std::endl;
+        gazebo::event::Events::stop.Signal();
+        
+        std::cout <<"\x1B[32m[[--- Gazebo Shutdown... ---]]\033[0m"<<std::endl;
+        //gazebo::shutdown(); //NOTE: This crashes as gazebo is running is a thread
+        //run_th.join();
+        std::cout <<"\x1B[32m[[--- Exiting Gazebo ---]]\033[0m"<<std::endl;
     }
     bool startHook()
     {
         if(!run_th.joinable())
             run_th = std::thread(std::bind(&RTTGazebo::runWorldForever,this));
-        else
-            std::cout <<"\x1B[32m[[--- Gazebo already running ---]]\033[0m"<<std::endl;
+        else{
+            std::cout <<"\x1B[32m[[--- Unpausing Simulation ---]]\033[0m"<<std::endl;
+            gazebo::event::Events::pause.Signal(false);
+        }
         return true;
     }
     void runWorldForever()
     {
         std::cout <<"\x1B[32m[[--- Gazebo running ---]]\033[0m"<<std::endl;
-        gazebo::runWorld(world, 0); // runs forever 
+        gazebo::runWorld(world, 0); // runs forever
+        std::cout <<"\x1B[32m[[--- Gazebo exiting runWorld() ---]]\033[0m"<<std::endl;
     }
     void updateHook()
     {
         go_sem.signal();
         return;
+    }
+    void stopHook()
+    {
+        std::cout <<"\x1B[32m[[--- Pausing Simulation ---]]\033[0m"<<std::endl;
+        gazebo::event::Events::pause.Signal(true);
     }
     void readPorts()
     {
@@ -168,12 +182,12 @@ public:
     {
         ticks_start = RTT::os::TimeService::Instance()->getTicks();
 
-        if(!model_configured) 
+        if(!model_configured)
             return;
-        
+
         readPorts();
-        
-        if(port_joint_position_cmd_in.connected() 
+
+        if(port_joint_position_cmd_in.connected()
             || port_joint_torque_cmd_in.connected())
         {
             dyn_param->JntToGravity(jnt_pos,jnt_trq_gravity);
@@ -184,11 +198,11 @@ public:
             // Set Gravity Mode or specified links
             for(auto& it : gravity_mode)
                         it.first->SetGravityMode(it.second);
-            
+
             jnt_trq_cmd_out = jnt_trq_cmd_in + jnt_trq_gravity.data;
-                        
+
             //std::cout << "T "<<jnt_trq_cmd_out.transpose()<<std::endl;
-           
+
             for(unsigned j=0; j<joint_idx.size(); j++)
                 gazebo_joints[joint_idx[j]]->SetForce(0,jnt_trq_cmd_out[j]);
         }
@@ -206,9 +220,9 @@ public:
         port_joint_position_out.write(jnt_pos.data);
         port_joint_velocity_out.write(jnt_vel);
         port_joint_torque_out.write(jnt_trq);
-        
+
         port_sync.write(true);
-        
+
         static visualization_msgs::Marker marker;
         static KDL::Vector cog;
         cog_solver->JntToCoG(jnt_pos,cog);
@@ -228,7 +242,7 @@ public:
         // Get the joints
         joint_idx.clear();
         joint_names.clear();
-        
+
         gazebo_joints = model->GetJoints();
         gazebo_links = model->GetLinks();
 
@@ -266,28 +280,28 @@ public:
         RTT::log(RTT::Info)<<"Gazebo model found "<<joint_idx.size()<<" joints "<<RTT::endlog();
 
         RTT::log(RTT::Info)<<"Creating KDL Chain "<<RTT::endlog();
-        
+
         static KDL::Chain chain;
         static KDL::Tree tree;
-    
+
         if(!rtt_ros_kdl_tools::initChainFromROSParamURDF(tree,chain))
         {
             RTT::log(RTT::Fatal)<<"Could not create the KDL chain"<<RTT::endlog();
             return false;
         }
         const unsigned int dof = chain.getNrOfJoints();
-        
+
         if(dof != joint_idx.size())
         {
             RTT::log(RTT::Fatal)<<"Sizes dont match : gazebo("<<joint_idx.size()<<") , kdl("<<dof<<")"<<RTT::endlog();
             return false;
         }
-        
+
         dyn_param.reset(new KDL::ChainDynParam(chain,KDL::Vector(world->Gravity().X(),
                                                                  world->Gravity().Y(),
                                                                  world->Gravity().Z())));
         cog_solver.reset(new KDL::ChainCoGSolver(chain));
-        
+
         jnt_pos.resize(dof);
         jnt_vel.resize(dof);
         jnt_trq.resize(dof);
@@ -295,7 +309,7 @@ public:
         jnt_trq_cmd_in.resize(dof);
         jnt_trq_gravity.resize(dof);
         jnt_trq_cmd_out.resize(dof);
-        
+
         jnt_pos.data.setZero();
         jnt_vel.setZero();
         jnt_trq.setZero();
@@ -304,16 +318,16 @@ public:
         jnt_trq_cmd_in.setZero();
         jnt_trq_gravity.data.setZero();
         jnt_trq_cmd_out.setZero();
-        
+
         port_joint_position_out.setDataSample(jnt_pos.data);
         port_joint_velocity_out.setDataSample(jnt_vel);
         port_joint_torque_out.setDataSample(jnt_trq);
-        
+
         model_configured = true;
-        
+
         return true;
     }
-    
+
     void createCoGMarker(const std::string& ns, const std::string& frame_id, double radius, const KDL::Vector& cog, visualization_msgs::Marker& marker) const{
         marker.header.frame_id = frame_id;
         marker.ns = ns;
@@ -340,11 +354,11 @@ public:
             jnt_vel[j] = gazebo_joints[joint_idx[j]]->GetVelocity(0);
             jnt_trq[j] = gazebo_joints[joint_idx[j]]->GetForce(0u);
         }
-        
+
         writetoPorts();
         ticks_stop = RTT::os::TimeService::Instance()->getTicks();
         run_world_elapsed = RTT::os::TimeService::Instance()->getSeconds(ticks_start);
-        
+
         if(use_rtt_sync)
             go_sem.wait();
     }
@@ -388,7 +402,7 @@ protected:
                     jnt_vel_cmd_in,
                     jnt_trq_cmd_in,
                     jnt_trq_cmd_out;
-                    
+
     std::unique_ptr<KDL::ChainDynParam> dyn_param;
     std::unique_ptr<KDL::ChainCoGSolver> cog_solver;
     RTT::OutputPort<visualization_msgs::Marker> port_cog_marker;
