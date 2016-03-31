@@ -137,13 +137,7 @@ public:
     }
     void cleanupHook()
     {
-        std::cout <<"\x1B[32m[[--- Stoping Simulation ---]]\033[0m"<<std::endl;
-        gazebo::event::Events::stop.Signal();
-        
-        std::cout <<"\x1B[32m[[--- Gazebo Shutdown... ---]]\033[0m"<<std::endl;
-        //gazebo::shutdown(); //NOTE: This crashes as gazebo is running is a thread
-        //run_th.join();
-        std::cout <<"\x1B[32m[[--- Exiting Gazebo ---]]\033[0m"<<std::endl;
+
     }
     bool startHook()
     {
@@ -362,7 +356,14 @@ public:
         if(use_rtt_sync)
             go_sem.wait();
     }
-    virtual ~RTTGazebo(){}
+    virtual ~RTTGazebo(){
+        std::cout <<"\x1B[32m[[--- Stoping Simulation ---]]\033[0m"<<std::endl;
+        gazebo::event::Events::stop.Signal();
+        std::cout <<"\x1B[32m[[--- Gazebo Shutdown... ---]]\033[0m"<<std::endl;
+        //gazebo::shutdown(); //NOTE: This crashes as gazebo is running is a thread
+        //run_th.join();
+        std::cout <<"\x1B[32m[[--- Exiting Gazebo ---]]\033[0m"<<std::endl;
+    }
     bool readyROSService(std_srvs::EmptyRequest& req,std_srvs::EmptyResponse& res)
     {
         return true;
