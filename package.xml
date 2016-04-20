@@ -18,9 +18,9 @@
   <build_depend>orocos_kdl</build_depend>
   <build_depend>rtt_rosclock</build_depend>
   <build_depend>rtt_ros_kdl_tools</build_depend>
-  <build_depend>rtt_rocomm</build_depend>
+  <build_depend>rtt_roscomm</build_depend>
   
-  <run_depend>rtt_rocomm</run_depend>
+  <run_depend>rtt_roscomm</run_depend>
   <run_depend>rtt</run_depend>
   <run_depend>ocl</run_depend>
   <run_depend>rtt_ros</run_depend>
