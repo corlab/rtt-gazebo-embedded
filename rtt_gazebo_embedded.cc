@@ -38,7 +38,7 @@ public:
     {
         RTT::log(RTT::Info) << "Creating " << name <<" with gazebo embedded !" << RTT::endlog();
         this->ports()->addPort("sync",port_sync).doc("Migth be used to trigger your component's updateHook().");
-        this->addProperty("use_rtt_sync",use_rtt_sync).doc("Gazebo ties to run at the component's rate (or slower).");
+        this->addProperty("use_rtt_sync",use_rtt_sync).doc("Gazebo tries to run at the component's rate (or slower).");
         this->addProperty("world_path",world_path).doc("The path to the .world file.");
         this->addOperation("add_plugin",&RTTGazebo::addPlugin,this,RTT::OwnThread).doc("The path to a plugin file.");
         this->addProperty("argv",argv).doc("argv passed to the deployer's main.");
@@ -46,8 +46,6 @@ public:
         this->addProperty("model_timeout_s",model_timeout_s).doc("Time during which we wait for the model to be spawned.");
         this->addProperty("run_world_elapsed",run_world_elapsed).doc("Duration of run world");
         this->addOperation("isModelConfigured",&RTTGazebo::isModelConfigured,this,RTT::ClientThread).doc("True if the model has been loaded.");
-
-        this->ports()->addPort("CenterOfGravityMarker", port_cog_marker).doc("");
 
         this->ports()->addPort("JointPosition", port_joint_position_out).doc("");
         this->ports()->addPort("JointVelocity", port_joint_velocity_out).doc("");
@@ -90,16 +88,9 @@ public:
         world = gazebo::loadWorld(world_path);
         if(!world) return false;
 
-        /*if(!gazeboConfigureHookThread())
-        {
-            RTT::log(RTT::Fatal) << "Gazebo configure Thread failed" << RTT::endlog();
-            return false;
-        }*/
         gz_conf_th = std::thread(std::bind(&RTTGazebo::gazeboConfigureHookThread,this));
         gz_conf_th.join();
 
-        //rtt_rosclock::use_ros_clock_topic();
-        //rtt_rosclock::enable_sim();
 
         RTT::log(RTT::Info) << "Binding world events" << RTT::endlog();
         world_begin =  gazebo::event::Events::ConnectWorldUpdateBegin(std::bind(&RTTGazebo::writeToSim,this));
@@ -157,7 +148,11 @@ public:
     }
     void updateHook()
     {
-        go_sem.signal();
+        if(use_rtt_sync)
+        {
+            gazebo::event::Events::pause.Signal(false);
+            go_sem.signal();
+        }
         return;
     }
     void stopHook()
@@ -216,12 +211,6 @@ public:
         port_joint_torque_out.write(jnt_trq);
 
         port_sync.write(true);
-
-        static visualization_msgs::Marker marker;
-        static KDL::Vector cog;
-        cog_solver->JntToCoG(jnt_pos,cog);
-        createCoGMarker("",gazebo_links[0]->GetName(),0.1,cog,marker);
-        port_cog_marker.write(marker);
     }
     bool gazeboConfigureHook(const gazebo::physics::ModelPtr& model)
     {
@@ -294,8 +283,6 @@ public:
         dyn_param.reset(new KDL::ChainDynParam(chain,KDL::Vector(world->Gravity().X(),
                                                                  world->Gravity().Y(),
                                                                  world->Gravity().Z())));
-        cog_solver.reset(new KDL::ChainCoGSolver(chain));
-
         jnt_pos.resize(dof);
         jnt_vel.resize(dof);
         jnt_trq.resize(dof);
@@ -320,21 +307,6 @@ public:
         model_configured = true;
 
         return true;
-    }
-
-    void createCoGMarker(const std::string& ns, const std::string& frame_id, double radius, const KDL::Vector& cog, visualization_msgs::Marker& marker) const{
-        marker.header.frame_id = frame_id;
-        marker.ns = ns;
-        marker.type = visualization_msgs::Marker::SPHERE;
-        marker.action = visualization_msgs::Marker::ADD;
-        marker.pose.position.x = cog.x();
-        marker.pose.position.y = cog.y();
-        marker.pose.position.z = cog.z();
-        marker.scale.x = radius;
-        marker.scale.y = radius;
-        marker.scale.z = radius;
-        marker.color.r = 1.0;
-        marker.color.a = 0.8;
     }
 
     void readSim()
@@ -405,8 +377,6 @@ protected:
                     jnt_trq_cmd_out;
 
     std::unique_ptr<KDL::ChainDynParam> dyn_param;
-    std::unique_ptr<KDL::ChainCoGSolver> cog_solver;
-    RTT::OutputPort<visualization_msgs::Marker> port_cog_marker;
     RTT::os::MutexRecursive configure_mutex;
     RTT::os::TimeService::ticks ticks_start,ticks_stop;
     double run_world_elapsed,model_timeout_s;
