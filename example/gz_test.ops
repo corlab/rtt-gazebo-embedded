@@ -1,0 +1,48 @@
+#!/usr/bin/env deployer
+
+import("rtt_gazebo_embedded")
+
+# Loading gazebo (this will start rosnode)
+loadComponent("gazebo","RTTGazeboEmbedded")
+
+# WorldUpdateBegin and End will be called by gazebo
+setActivity("gazebo",0,10,ORO_SCHED_OTHER)
+
+# This is optional
+gazebo.argv = strings("--verbose","--record_encoding=zlib")
+
+# Load the world file
+gazebo.world_path = "worlds/empty.world"
+
+# Load the ROS plugins
+gazebo.add_plugin("libgazebo_ros_paths_plugin.so")
+gazebo.add_plugin("libgazebo_ros_api_plugin.so")
+
+
+gazebo.configure()
+
+gazebo.start()
+
+# Now you can spawn a robot into gazebo
+
+# If you have a urdf you can write :
+# rosrun gazebo_ros spawn_model -param robot_description -urdf -model my_model
+
+
+# Loading the model interface
+
+import("rtt_gazebo_embedded")
+
+# The component is also aperiodic,
+# WorldUpdateBegin and End will be called by gazebo
+
+loadComponent("my_model","ModelPluginExample")
+connectPeers("my_model","gazebo")
+
+# Get the gazebo model, timeout 10s
+# By default, the name of the orocos component
+# should be the name of the loaded model
+
+my_model.configure()
+
+my_model.start()
