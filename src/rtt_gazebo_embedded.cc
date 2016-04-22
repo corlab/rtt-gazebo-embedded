@@ -7,35 +7,16 @@ using namespace std;
 RTTGazeboEmbedded::RTTGazeboEmbedded(const std::string& name):
 TaskContext(name),
 world_path("worlds/empty.world"),
-model_name(name),
-go_sem(0),
-model_timeout_s(20.0),
-use_rtt_sync(false)
-//is_model_configured(false)
+use_rtt_sync(false),
+go_sem(0)
 {
-    RTT::log(RTT::Info) << "Creating " << name <<" with gazebo embedded !" << RTT::endlog();
-    this->ports()->addPort("sync",port_sync).doc("Migth be used to trigger your component's updateHook().");
-    this->addProperty("use_rtt_sync",use_rtt_sync).doc("Gazebo tries to run at the component's rate (or slower).");
+    log(Info) << "Creating " << name <<" with gazebo embedded !" << endlog();
+    this->addProperty("use_rtt_sync",use_rtt_sync).doc("At world end, Gazebo waits on rtt's updatehook to finish (setPeriod(1) will make gazebo runs at 1Hz)");
     this->addProperty("world_path",world_path).doc("The path to the .world file.");
     this->addOperation("add_plugin",&RTTGazeboEmbedded::addPlugin,this,RTT::OwnThread).doc("The path to a plugin file.");
-    this->addOperation("getWorldPtr",&RTTGazeboEmbedded::getWorldPtr,this,RTT::OwnThread).doc("The world to get models from.");
     this->addOperation("getModelPtr",&RTTGazeboEmbedded::getModelPtr,this,RTT::ClientThread).doc("Get the model directly");
     this->addProperty("argv",argv).doc("argv passed to the deployer's main.");
-//         this->addProperty("model_name",model_name).doc("The name of the robot.");
-//         this->addProperty("model_timeout_s",model_timeout_s).doc("Time during which we wait for the model to be spawned.");
-    this->addProperty("run_world_elapsed",run_world_elapsed).doc("Duration of run world");
-//         this->addOperation("isModelConfigured",&RTTGazeboEmbedded::isModelConfigured,this,RTT::ClientThread).doc("True if the model has been loaded.");
-
-//         this->ports()->addPort("JointPosition", port_joint_position_out).doc("");
-//         this->ports()->addPort("JointVelocity", port_joint_velocity_out).doc("");
-//         this->ports()->addPort("JointTorque", port_joint_torque_out).doc("");
-// 
-//         this->ports()->addPort("JointPositionCommand", port_joint_position_cmd_in).doc("");
-//         this->ports()->addPort("JointVelocityCommand", port_joint_velocity_cmd_in).doc("");
-//         this->ports()->addPort("JointTorqueCommand", port_joint_torque_cmd_in).doc("");
-
-    this->addOperation("readyROSService",&RTTGazeboEmbedded::readyROSService,this,RTT::OwnThread).doc("Say everyone the component is ready.");
-
+    
     gazebo::printVersion();
     gazebo::common::Console::SetQuiet(false);
 }
@@ -67,11 +48,6 @@ gazebo::physics::ModelPtr RTTGazeboEmbedded::getModelPtr(const std::string& mode
     
     RTT::log(RTT::Error) << "["<<getName()<<"] Model ["<<model_name<<"] timed out" << RTT::endlog();
     return nullptr;
-}
-
-gazebo::physics::WorldPtr RTTGazeboEmbedded::getWorldPtr()
-{
-    return this->world;
 }
 
 void RTTGazeboEmbedded::addPlugin(const std::string& filename)
@@ -191,8 +167,6 @@ void RTTGazeboEmbedded::writeToSim()
     
     for(auto c : client_map)
         c.second.write_handle.collect();
-    
-    port_sync.write(true);
 }
 
 void RTTGazeboEmbedded::readSim()
@@ -218,11 +192,6 @@ void RTTGazeboEmbedded::cleanupHook()
     gazebo::shutdown();
 
     std::cout <<"\x1B[32m[[--- Exiting Gazebo ---]]\033[0m"<<std::endl;
-}
-
-bool RTTGazeboEmbedded::readyROSService(std_srvs::EmptyRequest& req,std_srvs::EmptyResponse& res)
-{
-    return true;
 }
 
 ORO_CREATE_COMPONENT(RTTGazeboEmbedded)
