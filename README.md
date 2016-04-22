@@ -1,20 +1,71 @@
-# RTT Gazebo Component
+# RTT Gazebo Embedded Component
 
 Simple [Gazebo stand alone](https://bitbucket.org/osrf/gazebo/src/d3b06088be22a15a25025a952414bffb8ff6aa2b/examples/stand_alone/custom_main/?at=default) object wrapped in an orocos component.
 
-It is different from [rtt_gazebo](https://github.com/jhu-lcsr/rtt_gazebo) in design and fonctionnalities : 
+## Design
 
-* `rtt_gazebo_embedded` is just a simple orocos components, which wrapps gazebo as a stand alone library. `rtt_gazebo` loads and orocos deployer as a world plugin. 
-An orocos component is then loaded inside this gazebo plugin. 
-This is very nice, but you can't have access directly to the deployer's console unless your launch a CORBA interface, which in the end creates a big overhead when dealing with [custom types](https://github.com/orocos/rtt_ros_integration/pull/51). 
-The goal of this component is to avoid this overhead and facilitate `syncing` gazebo with other orocos components.
+A gazebo instance is launch with the RTTGazeboEmbedded component, which provides
+a method to get the pointer to a specific model.
 
-* `rtt_gazebo_embedded` only supports **one** robot, whereas `rtt_gazebo` might supports several.
-The main adantage of this package over `rtt_gazebo` is that you don't need to bother with the CORBA interface and see your robot as a standard rtt component.
+Then you just have to create an orocos TaskContext and bind those two functions :
 
-* The component loads the ROS api, then waits at the configure step for a model to be spawned. `roslaunch rtt_lwr_sim spawn_robot robot_name:=lwr_sim tip_link:=ati_link`
+```
+gazebo::event::Events::ConnectWorldUpdateBegin(std::bind(&MyModel::WorldUpdateBegin,this));
 
-* Then gazebo runs forever in a `separate thread`, so we can stop and start the component (using conman for example).
+gazebo::event::Events::ConnectWorldUpdateEnd(std::bind(&MyModel::WorldUpdateEnd,this));
+```
 
-* Reading/Writing the model's joints and orocos ports is done using [gazebo event interface](https://github.com/ahoarau/rtt_gazebo_embedded/blob/master/rtt_gazebo_embedded.cc#L105:L106).
 
+## Tutorial
+
+You can launch the demo in examples/ : ```cd examples; ./gz_test.ops```
+
+```ruby
+#!/usr/bin/env deployer
+
+import("rtt_gazebo_embedded")
+
+# Loading gazebo (this will start rosnode)
+loadComponent("gazebo","RTTGazeboEmbedded")
+
+# WorldUpdateBegin and End will be called by gazebo
+setActivity("gazebo",0,10,ORO_SCHED_OTHER)
+
+# This is optional
+gazebo.argv = strings("--verbose","--record_encoding=zlib")
+
+# Load the world file (ex pr2 model, but it can be "worlds/empty.world" also)
+gazebo.world_path = "/usr/share/gazebo-7/worlds/pr2.world"
+
+# Load the ROS plugins
+gazebo.add_plugin("libgazebo_ros_paths_plugin.so")
+gazebo.add_plugin("libgazebo_ros_api_plugin.so")
+
+
+gazebo.configure()
+
+gazebo.start()
+
+# If your model is not already loaded, you can spawn it like this :
+# rosrun gazebo_ros spawn_model -param robot_description -urdf -model my_model
+
+
+# Loading the model interface
+
+import("rtt_gazebo_embedded")
+
+# The component is also aperiodic,
+# WorldUpdateBegin and End will be called by gazebo
+
+loadComponent("pr2","ModelPluginExample")
+connectPeers("pr2","gazebo")
+
+# Get the gazebo model, timeout 10s
+# By default, the name of the orocos component
+# should be the name of the loaded model
+
+pr2.configure()
+
+pr2.start()
+
+```
