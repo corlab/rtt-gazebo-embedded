@@ -14,7 +14,7 @@ go_sem(0)
     this->addProperty("use_rtt_sync",use_rtt_sync).doc("At world end, Gazebo waits on rtt's updatehook to finish (setPeriod(1) will make gazebo runs at 1Hz)");
     this->addProperty("world_path",world_path).doc("The path to the .world file.");
     this->addOperation("add_plugin",&RTTGazeboEmbedded::addPlugin,this,RTT::OwnThread).doc("The path to a plugin file.");
-    this->addOperation("getModelPtr",&RTTGazeboEmbedded::getModelPtr,this,RTT::ClientThread).doc("Get the model directly");
+    this->addOperation("getModelPtr",&RTTGazeboEmbedded::getModelPtr,this,RTT::ClientThread).doc("Get a pointer to a loaded model. Has a timeout param");
     this->addProperty("argv",argv).doc("argv passed to the deployer's main.");
     
     gazebo::printVersion();
@@ -22,32 +22,31 @@ go_sem(0)
 }
 gazebo::physics::ModelPtr RTTGazeboEmbedded::getModelPtr(const std::string& model_name,double timeout_s)
 {
+    pauseSimulation();
     RTT::log(RTT::Info) <<"["<<getName()<<"] Trying to get "<<model_name<<" in less then "<<timeout_s<<"s" << RTT::endlog();
     gazebo::physics::ModelPtr model = nullptr;
     auto tstart = TimeService::Instance()->getTicks();
     while(true)
     {
         auto elapsed = TimeService::Instance()->getSeconds(tstart);
-        if(elapsed > timeout_s) break;
-
-        // Exit gazebo run loop
-        gazebo::runWorld(world, 1);
+        if(elapsed > timeout_s)
+        {
+            RTT::log(RTT::Error) << "["<<getName()<<"] Model ["<<model_name<<"] timed out" << RTT::endlog();
+            break;
+        }
 
         model = world->GetModel(model_name);
 
         if(model){
-            RTT::log(RTT::Info) << "["<<getName()<<"] Model ["<<model_name<<"] acquired !" << RTT::endlog();
-            run_th.join();
-            this->startHook();
-            return model;
+            std::cout << "["<<getName()<<"] Model ["<<model_name<<"] acquired !" << std::endl;
+            break;
         }
 
         usleep(1E6);
-        RTT::log(RTT::Info) << "["<<getName()<<"] waiting for model ["<<model_name<<"] to come up" << RTT::endlog();
+        std::cout << "["<<getName()<<"] waiting for model ["<<model_name<<"] to come up" << std::endl;
     }
-    
-    RTT::log(RTT::Error) << "["<<getName()<<"] Model ["<<model_name<<"] timed out" << RTT::endlog();
-    return nullptr;
+    unPauseSimulation();
+    return std::move(model);
 }
 
 void RTTGazeboEmbedded::addPlugin(const std::string& filename)
@@ -65,18 +64,20 @@ bool RTTGazeboEmbedded::configureHook()
 {
     RTT::log(RTT::Info) << "Creating world at "<< world_path << RTT::endlog();
 
-    if(! gazebo::setupServer(argv))
-    {
-        RTT::log(RTT::Error) << "Could not setupServer " << RTT::endlog();
-        return false;
-    }
+    try{
+        if(! gazebo::setupServer(argv))
+        {
+            RTT::log(RTT::Error) << "Could not setupServer " << RTT::endlog();
+            return false;
+        }
+    }catch(...){}
 
     world = gazebo::loadWorld(world_path);
     if(!world) return false;
 
-    RTT::log(RTT::Info) << "Binding world events" << RTT::endlog();
-    world_begin =  gazebo::event::Events::ConnectWorldUpdateBegin(std::bind(&RTTGazeboEmbedded::writeToSim,this));
-    world_end = gazebo::event::Events::ConnectWorldUpdateEnd(std::bind(&RTTGazeboEmbedded::readSim,this));
+//     RTT::log(RTT::Info) << "Binding world events" << RTT::endlog();
+//     world_begin =  gazebo::event::Events::ConnectWorldUpdateBegin(std::bind(&RTTGazeboEmbedded::WorldUpdateBegin,this));
+//     world_end = gazebo::event::Events::ConnectWorldUpdateEnd(std::bind(&RTTGazeboEmbedded::WorldUpdateEnd,this));
 
     return true;
 }
@@ -87,7 +88,7 @@ bool RTTGazeboEmbedded::startHook()
     if(!run_th.joinable())
         run_th = std::thread(std::bind(&RTTGazeboEmbedded::runWorldForever,this));
     else{
-        unPause();
+        unPauseSimulation();
     }
     return true;
 }
@@ -106,12 +107,12 @@ void RTTGazeboEmbedded::updateHook()
     }
     return;
 }
-void RTTGazeboEmbedded::pause()
+void RTTGazeboEmbedded::pauseSimulation()
 {
     std::cout <<"\x1B[32m[[--- Pausing Simulation ---]]\033[0m"<<std::endl;
     gazebo::event::Events::pause.Signal(true);
 }
-void RTTGazeboEmbedded::unPause()
+void RTTGazeboEmbedded::unPauseSimulation()
 {
     std::cout <<"\x1B[32m[[--- Unpausing Simulation ---]]\033[0m"<<std::endl;
     gazebo::event::Events::pause.Signal(false);
@@ -119,7 +120,7 @@ void RTTGazeboEmbedded::unPause()
 
 void RTTGazeboEmbedded::stopHook()
 {
-    pause();
+    pauseSimulation();
 }
 
 void RTTGazeboEmbedded::checkClientConnections()
@@ -132,13 +133,13 @@ void RTTGazeboEmbedded::checkClientConnections()
             if(client_map.find(p) == client_map.end())
             {
                 if(getPeer(p)->provides("gazebo") && 
-                    getPeer(p)->provides("gazebo")->hasOperation("read") &&
-                    getPeer(p)->provides("gazebo")->hasOperation("write")
+                    getPeer(p)->provides("gazebo")->hasOperation("WorldUpdateBegin") &&
+                    getPeer(p)->provides("gazebo")->hasOperation("WorldUpdateEnd")
                 )
                 {
                     log(Info) << "Adding new client "<<p<<endlog();
-                    client_map[p] = ClientConnection(getPeer(p)->provides("gazebo")->getOperation("read"),
-                                                    getPeer(p)->provides("gazebo")->getOperation("write"));
+                    client_map[p] = ClientConnection(getPeer(p)->provides("gazebo")->getOperation("WorldUpdateBegin"),
+                                                    getPeer(p)->provides("gazebo")->getOperation("WorldUpdateEnd"));
                 }
             }
         }
@@ -147,8 +148,8 @@ void RTTGazeboEmbedded::checkClientConnections()
     auto it = std::begin(client_map);
     while(it != std::end(client_map))
     {
-        if(!it->second.read_callback.ready() || 
-            !it->second.write_callback.ready())
+        if(!it->second.world_end.ready() || 
+            !it->second.world_begin.ready())
         {
             log(Warning) << "Removing broken connection with client "<<it->first<<endlog();
             it = client_map.erase(it);
@@ -158,38 +159,45 @@ void RTTGazeboEmbedded::checkClientConnections()
     return;
 }
 
-void RTTGazeboEmbedded::writeToSim()
+void RTTGazeboEmbedded::WorldUpdateBegin()
 {
     checkClientConnections();
     
     for(auto c : client_map)
-        c.second.write_handle = c.second.write_callback.send();
+        if(getPeer(c.first)->isConfigured() 
+            && getPeer(c.first)->isRunning())
+            c.second.world_begin_handle = c.second.world_begin.send();
     
     for(auto c : client_map)
-        c.second.write_handle.collect();
+        if(getPeer(c.first)->isConfigured() 
+            && getPeer(c.first)->isRunning())
+            c.second.world_begin_handle.collect();
 }
 
-void RTTGazeboEmbedded::readSim()
+void RTTGazeboEmbedded::WorldUpdateEnd()
 {
-    for(auto c : client_map)
-        c.second.read_handle = c.second.read_callback.send();
+    checkClientConnections();
     
     for(auto c : client_map)
-        c.second.read_handle.collect();
+        if(getPeer(c.first)->isConfigured() 
+            && getPeer(c.first)->isRunning())
+            c.second.world_end_handle = c.second.world_end.send();
+    
+    for(auto c : client_map)
+        if(getPeer(c.first)->isConfigured() 
+            && getPeer(c.first)->isRunning())
+            c.second.world_end_handle.collect();
 
     if(use_rtt_sync)
         go_sem.wait();
 }
 void RTTGazeboEmbedded::cleanupHook()
 {
-    this->unPause();
     std::cout <<"\x1B[32m[[--- Stoping Simulation ---]]\033[0m"<<std::endl;
-    gazebo::event::Events::stop.Signal();
-    gazebo::runWorld(this->world, 1);
-    this->run_th.join();
     std::cout <<"\x1B[32m[[--- Gazebo Shutdown... ---]]\033[0m"<<std::endl;
     //NOTE: This crashes as gazebo is running is a thread
     gazebo::shutdown();
+    run_th.join();
 
     std::cout <<"\x1B[32m[[--- Exiting Gazebo ---]]\033[0m"<<std::endl;
 }
