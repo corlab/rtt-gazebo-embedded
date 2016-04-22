@@ -6,32 +6,29 @@ project(rtt_gazebo_embedded CXX)
 
 find_package(catkin REQUIRED COMPONENTS
   rtt_ros
-  cmake_modules
   )
 
 find_package(gazebo REQUIRED)
-#find_package(OROCOS-RTT REQUIRED)
-find_package(Eigen REQUIRED)
 
 include_directories(
     include
     ${GAZEBO_INCLUDE_DIRS}
     ${catkin_INCLUDE_DIRS}
     ${USE_OROCOS_INCLUDE_DIRS}
-    ${SDFormat_INCLUDE_DIRS}
-    ${Eigen_INCLUDE_DIRS}
     )
-    
-link_directories(${GAZEBO_LIBRARY_DIRS})
+
 list(APPEND CMAKE_CXX_FLAGS "${GAZEBO_CXX_FLAGS}")
 
 orocos_component(${PROJECT_NAME} src/${PROJECT_NAME}.cc)
-target_link_libraries(${PROJECT_NAME} ${GAZEBO_LIBRARIES} pthread ${USE_OROCOS_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${GAZEBO_LIBRARIES} ${USE_OROCOS_LIBRARIES})
 set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY COMPILE_DEFINITIONS RTT_COMPONENT)
 
 orocos_install_headers(FILE include/${PROJECT_NAME}/${PROJECT_NAME}.hh)
+
+add_subdirectory(example)
 
 orocos_generate_package(
     INCLUDE_DIRS include
     DEPENDS rtt_ros
 )
+
