@@ -5,15 +5,22 @@ using namespace RTT::os;
 using namespace std;
 
 #ifndef GAZEBO_CREATER_6
+struct g_vectorStringDup
+{
+  char *operator()(const std::string &_s)
+  {
+    return strdup(_s.c_str());
+  }
+};
+
 namespace gazebo{
-namespace client{
-    bool setup(const std::vector<std::string> &_args)
+    bool setupServer(const std::vector<std::string> &_args)
     {
       std::vector<char *> pointers(_args.size());
       std::transform(_args.begin(), _args.end(), pointers.begin(),
                      g_vectorStringDup());
       pointers.push_back(0);
-      bool result = gazebo::client::setup(_args.size(), &pointers[0]);
+      bool result = gazebo::setupServer(_args.size(), &pointers[0]);
 
       // Deallocate memory for the command line arguments alloocated with strdup.
       for (size_t i = 0; i < pointers.size(); ++i)
@@ -21,7 +28,7 @@ namespace client{
 
       return result;
     }
-}}
+}
 #endif
 
 RTTGazeboEmbedded::RTTGazeboEmbedded(const std::string& name):
