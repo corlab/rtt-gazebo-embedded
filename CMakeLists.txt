@@ -23,7 +23,7 @@ orocos_component(${PROJECT_NAME} src/${PROJECT_NAME}.cc)
 target_link_libraries(${PROJECT_NAME} ${GAZEBO_LIBRARIES} ${USE_OROCOS_LIBRARIES})
 set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY COMPILE_DEFINITIONS RTT_COMPONENT)
 
-orocos_install_headers(FILE include/${PROJECT_NAME}/${PROJECT_NAME}.hh)
+orocos_install_headers(DIRECTORY include/${PROJECT_NAME})
 
 add_subdirectory(example)
 
