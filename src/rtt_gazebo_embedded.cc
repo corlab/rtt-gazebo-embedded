@@ -4,6 +4,26 @@ using namespace RTT;
 using namespace RTT::os;
 using namespace std;
 
+#ifndef GAZEBO_CREATER_6
+namespace gazebo{
+namespace client{
+    bool setup(const std::vector<std::string> &_args)
+    {
+      std::vector<char *> pointers(_args.size());
+      std::transform(_args.begin(), _args.end(), pointers.begin(),
+                     g_vectorStringDup());
+      pointers.push_back(0);
+      bool result = gazebo::client::setup(_args.size(), &pointers[0]);
+
+      // Deallocate memory for the command line arguments alloocated with strdup.
+      for (size_t i = 0; i < pointers.size(); ++i)
+        free(pointers.at(i));
+
+      return result;
+    }
+}}
+#endif
+
 RTTGazeboEmbedded::RTTGazeboEmbedded(const std::string& name):
 TaskContext(name),
 world_path("worlds/empty.world"),
@@ -16,9 +36,11 @@ go_sem(0)
     this->addOperation("add_plugin",&RTTGazeboEmbedded::addPlugin,this,RTT::OwnThread).doc("The path to a plugin file.");
     this->addOperation("getModelPtr",&RTTGazeboEmbedded::getModelPtr,this,RTT::ClientThread).doc("Get a pointer to a loaded model. Has a timeout param");
     this->addProperty("argv",argv).doc("argv passed to the deployer's main.");
-    
+
     gazebo::printVersion();
+#ifdef GAZEBO_CREATER_6
     gazebo::common::Console::SetQuiet(false);
+#endif
 }
 gazebo::physics::ModelPtr RTTGazeboEmbedded::getModelPtr(const std::string& model_name,double timeout_s)
 {
@@ -125,14 +147,14 @@ void RTTGazeboEmbedded::stopHook()
 
 void RTTGazeboEmbedded::checkClientConnections()
 {
-    if(getPeerList().size() && 
+    if(getPeerList().size() &&
         getPeerList().size() != client_map.size())
     {
         for(auto p : getPeerList())
         {
             if(client_map.find(p) == client_map.end())
             {
-                if(getPeer(p)->provides("gazebo") && 
+                if(getPeer(p)->provides("gazebo") &&
                     getPeer(p)->provides("gazebo")->hasOperation("WorldUpdateBegin") &&
                     getPeer(p)->provides("gazebo")->hasOperation("WorldUpdateEnd")
                 )
@@ -144,11 +166,11 @@ void RTTGazeboEmbedded::checkClientConnections()
             }
         }
     }
-    
+
     auto it = std::begin(client_map);
     while(it != std::end(client_map))
     {
-        if(!it->second.world_end.ready() || 
+        if(!it->second.world_end.ready() ||
             !it->second.world_begin.ready())
         {
             log(Warning) << "Removing broken connection with client "<<it->first<<endlog();
@@ -162,14 +184,14 @@ void RTTGazeboEmbedded::checkClientConnections()
 void RTTGazeboEmbedded::WorldUpdateBegin()
 {
     checkClientConnections();
-    
+
     for(auto c : client_map)
-        if(getPeer(c.first)->isConfigured() 
+        if(getPeer(c.first)->isConfigured()
             && getPeer(c.first)->isRunning())
             c.second.world_begin_handle = c.second.world_begin.send();
-    
+
     for(auto c : client_map)
-        if(getPeer(c.first)->isConfigured() 
+        if(getPeer(c.first)->isConfigured()
             && getPeer(c.first)->isRunning())
             c.second.world_begin_handle.collect();
 }
@@ -177,14 +199,14 @@ void RTTGazeboEmbedded::WorldUpdateBegin()
 void RTTGazeboEmbedded::WorldUpdateEnd()
 {
     checkClientConnections();
-    
+
     for(auto c : client_map)
-        if(getPeer(c.first)->isConfigured() 
+        if(getPeer(c.first)->isConfigured()
             && getPeer(c.first)->isRunning())
             c.second.world_end_handle = c.second.world_end.send();
-    
+
     for(auto c : client_map)
-        if(getPeer(c.first)->isConfigured() 
+        if(getPeer(c.first)->isConfigured()
             && getPeer(c.first)->isRunning())
             c.second.world_end_handle.collect();
 

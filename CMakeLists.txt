@@ -12,6 +12,12 @@ find_package(catkin REQUIRED COMPONENTS
 
 find_package(gazebo REQUIRED)
 
+
+if(${GAZEBO_VERSION} AND ${GAZEBO_VERSION} GREATER 6)
+    add_definitions(-DGAZEBO_CREATER_6)
+endif()
+
+
 include_directories(
     include
     ${GAZEBO_INCLUDE_DIRS}
