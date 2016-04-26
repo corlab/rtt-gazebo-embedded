@@ -35,7 +35,8 @@ RTTGazeboEmbedded::RTTGazeboEmbedded(const std::string& name):
 TaskContext(name),
 world_path("worlds/empty.world"),
 use_rtt_sync(false),
-go_sem(0)
+go_sem(0),
+gravity_vector(3)
 {
     log(Info) << "Creating " << name <<" with gazebo embedded !" << endlog();
     this->addProperty("use_rtt_sync",use_rtt_sync).doc("At world end, Gazebo waits on rtt's updatehook to finish (setPeriod(1) will make gazebo runs at 1Hz)");
@@ -43,6 +44,7 @@ go_sem(0)
     this->addOperation("add_plugin",&RTTGazeboEmbedded::addPlugin,this,RTT::OwnThread).doc("The path to a plugin file.");
     this->addOperation("getModelPtr",&RTTGazeboEmbedded::getModelPtr,this,RTT::ClientThread).doc("Get a pointer to a loaded model. Has a timeout param");
     this->addProperty("argv",argv).doc("argv passed to the deployer's main.");
+    this->addConstant("gravity_vector",gravity_vector);//.doc("The gravity vector from gazebo, available after configure().");
 
     gazebo::printVersion();
 #ifdef GAZEBO_CREATER_6
@@ -102,6 +104,11 @@ bool RTTGazeboEmbedded::configureHook()
     }catch(...){}
 
     world = gazebo::loadWorld(world_path);
+
+    gravity_vector[0] = world->GetPhysicsEngine()->GetGravity()[0];
+    gravity_vector[1] = world->GetPhysicsEngine()->GetGravity()[1];
+    gravity_vector[2] = world->GetPhysicsEngine()->GetGravity()[2];
+
     if(!world) return false;
 
 //     RTT::log(RTT::Info) << "Binding world events" << RTT::endlog();

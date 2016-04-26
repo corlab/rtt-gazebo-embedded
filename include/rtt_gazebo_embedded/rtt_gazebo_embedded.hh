@@ -27,34 +27,35 @@ public:
     // Not thread safe !
     gazebo::physics::WorldPtr getWorldPtr();
     gazebo::physics::ModelPtr getModelPtr(const std::string& model_name,double timeout_s);
-    
+
 protected:
     void WorldUpdateBegin();
     void WorldUpdateEnd();
-    
+
     bool startHook();
     void runWorldForever();
     void updateHook();
     void stopHook();
 
     void cleanupHook();
-    
+
     void pauseSimulation();
     void unPauseSimulation();
-    
+
     void checkClientConnections();
-    
+
     std::string world_path;
     gazebo::physics::WorldPtr world;
     gazebo::event::ConnectionPtr world_begin;
     gazebo::event::ConnectionPtr world_end;
-  
+
+    std::vector<double> gravity_vector;
     std::vector<std::string> argv;
     bool use_rtt_sync;
     RTT::os::Semaphore go_sem;
-    
+
     std::thread run_th;
-    
+
     // Useful for threaded updates
     struct ClientConnection
     {
@@ -68,7 +69,7 @@ protected:
         RTT::SendHandle<void(void)> world_begin_handle;
         RTT::SendHandle<void(void)> world_end_handle;
     };
-    
+
     std::map<std::string,ClientConnection> client_map;
 };
 
