@@ -1,8 +1,10 @@
 #include <rtt/TaskContext.hpp>
 #include <rtt/Port.hpp>
 #include <rtt/Component.hpp>
+
 #include <gazebo/gazebo.hh>
-#include <rtt/scripting/Scripting.hpp>
+#include <gazebo/common/common.hh>
+#include <gazebo/physics/physics.hh>
 
 class ModelPluginExample : public RTT::TaskContext
 {
@@ -18,25 +20,7 @@ public:
 
     bool configureHook()
     {
-        // Verify that rtt_gazebo_embedded is loaded
-        if(!hasPeer("gazebo"))
-        {
-            RTT::log(RTT::Error) << "Gazebo component is not loaded ! \n"
-                "Please run loadComponent(\"gazebo\",\"RttGazeboEmbedded\")\n"
-                "And connectPeers(\"gazebo\",\""<<getName()<<"\")"
-                ""<< RTT::endlog();
-            return false;
-        }
-        
-        // Get the function from gazebo_embedded
-        RTT::OperationCaller<gazebo::physics::ModelPtr(const std::string&,double)> get_model 
-                = getPeer("gazebo")->getOperation("getModelPtr");
-        
-        // Verify if function exists
-        assert(get_model.ready());
-        
-        // Get the model 
-        model = get_model.call(getName(),20.0);
+        model = gazebo::physics::get_world()->GetModel(getName());
         
         return bool(model);
     }
