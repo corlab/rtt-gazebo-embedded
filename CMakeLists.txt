@@ -14,7 +14,7 @@ find_package(gazebo REQUIRED)
 
 
 if(${GAZEBO_VERSION} AND ${GAZEBO_VERSION} GREATER 6)
-    add_definitions(-DGAZEBO_CREATER_6)
+    add_definitions(-DGAZEBO_GREATER_6)
 endif()
 
 
