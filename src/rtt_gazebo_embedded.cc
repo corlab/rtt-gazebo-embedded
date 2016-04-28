@@ -4,7 +4,7 @@ using namespace RTT;
 using namespace RTT::os;
 using namespace std;
 
-#ifndef GAZEBO_CREATER_6
+#ifndef GAZEBO_GREATER_6
 struct g_vectorStringDup
 {
   char *operator()(const std::string &_s)
@@ -47,7 +47,7 @@ gravity_vector(3)
     this->addConstant("gravity_vector",gravity_vector);//.doc("The gravity vector from gazebo, available after configure().");
 
     gazebo::printVersion();
-#ifdef GAZEBO_CREATER_6
+#ifdef GAZEBO_GREATER_6
     gazebo::common::Console::SetQuiet(false);
 #endif
 }
@@ -110,10 +110,6 @@ bool RTTGazeboEmbedded::configureHook()
     gravity_vector[2] = world->GetPhysicsEngine()->GetGravity()[2];
 
     if(!world) return false;
-
-//     RTT::log(RTT::Info) << "Binding world events" << RTT::endlog();
-//     world_begin =  gazebo::event::Events::ConnectWorldUpdateBegin(std::bind(&RTTGazeboEmbedded::WorldUpdateBegin,this));
-//     world_end = gazebo::event::Events::ConnectWorldUpdateEnd(std::bind(&RTTGazeboEmbedded::WorldUpdateEnd,this));
 
     return true;
 }
@@ -230,6 +226,7 @@ void RTTGazeboEmbedded::WorldUpdateEnd()
 void RTTGazeboEmbedded::cleanupHook()
 {
     std::cout <<"\x1B[32m[[--- Stoping Simulation ---]]\033[0m"<<std::endl;
+    gazebo::event::Events::sigInt.Signal();
     std::cout <<"\x1B[32m[[--- Gazebo Shutdown... ---]]\033[0m"<<std::endl;
     //NOTE: This crashes as gazebo is running is a thread
     gazebo::shutdown();
