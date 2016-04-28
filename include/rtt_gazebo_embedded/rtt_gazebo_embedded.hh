@@ -23,10 +23,7 @@ public:
     void setWorldFilePath(const std::string& file_path);
     bool configureHook();
 
-    virtual ~RTTGazeboEmbedded(){};
-    // Not thread safe !
-    gazebo::physics::WorldPtr getWorldPtr();
-    gazebo::physics::ModelPtr getModelPtr(const std::string& model_name,double timeout_s);
+    ~RTTGazeboEmbedded();
 
 protected:
     void WorldUpdateBegin();

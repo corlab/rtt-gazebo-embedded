@@ -35,14 +35,13 @@ RTTGazeboEmbedded::RTTGazeboEmbedded(const std::string& name):
 TaskContext(name),
 world_path("worlds/empty.world"),
 use_rtt_sync(false),
-go_sem(0),
+go_sem(1),
 gravity_vector(3)
 {
     log(Info) << "Creating " << name <<" with gazebo embedded !" << endlog();
     this->addProperty("use_rtt_sync",use_rtt_sync).doc("At world end, Gazebo waits on rtt's updatehook to finish (setPeriod(1) will make gazebo runs at 1Hz)");
     this->addProperty("world_path",world_path).doc("The path to the .world file.");
     this->addOperation("add_plugin",&RTTGazeboEmbedded::addPlugin,this,RTT::OwnThread).doc("The path to a plugin file.");
-    this->addOperation("getModelPtr",&RTTGazeboEmbedded::getModelPtr,this,RTT::ClientThread).doc("Get a pointer to a loaded model. Has a timeout param");
     this->addProperty("argv",argv).doc("argv passed to the deployer's main.");
     this->addConstant("gravity_vector",gravity_vector);//.doc("The gravity vector from gazebo, available after configure().");
 
@@ -50,34 +49,6 @@ gravity_vector(3)
 #ifdef GAZEBO_GREATER_6
     gazebo::common::Console::SetQuiet(false);
 #endif
-}
-gazebo::physics::ModelPtr RTTGazeboEmbedded::getModelPtr(const std::string& model_name,double timeout_s)
-{
-    pauseSimulation();
-    RTT::log(RTT::Info) <<"["<<getName()<<"] Trying to get "<<model_name<<" in less then "<<timeout_s<<"s" << RTT::endlog();
-    gazebo::physics::ModelPtr model = nullptr;
-    auto tstart = TimeService::Instance()->getTicks();
-    while(true)
-    {
-        auto elapsed = TimeService::Instance()->getSeconds(tstart);
-        if(elapsed > timeout_s)
-        {
-            RTT::log(RTT::Error) << "["<<getName()<<"] Model ["<<model_name<<"] timed out" << RTT::endlog();
-            break;
-        }
-
-        model = world->GetModel(model_name);
-
-        if(model){
-            std::cout << "["<<getName()<<"] Model ["<<model_name<<"] acquired !" << std::endl;
-            break;
-        }
-
-        usleep(1E6);
-        std::cout << "["<<getName()<<"] waiting for model ["<<model_name<<"] to come up" << std::endl;
-    }
-    unPauseSimulation();
-    return std::move(model);
 }
 
 void RTTGazeboEmbedded::addPlugin(const std::string& filename)
@@ -111,6 +82,10 @@ bool RTTGazeboEmbedded::configureHook()
 
     if(!world) return false;
 
+//     RTT::log(RTT::Info) << "Binding world events" << RTT::endlog();
+//     world_begin =  gazebo::event::Events::ConnectWorldUpdateBegin(std::bind(&RTTGazeboEmbedded::WorldUpdateBegin,this));
+    world_end = gazebo::event::Events::ConnectWorldUpdateEnd(std::bind(&RTTGazeboEmbedded::WorldUpdateEnd,this));
+
     return true;
 }
 
@@ -133,10 +108,7 @@ void RTTGazeboEmbedded::runWorldForever()
 void RTTGazeboEmbedded::updateHook()
 {
     if(use_rtt_sync)
-    {
-        gazebo::event::Events::pause.Signal(false);
         go_sem.signal();
-    }
     return;
 }
 void RTTGazeboEmbedded::pauseSimulation()
@@ -152,7 +124,8 @@ void RTTGazeboEmbedded::unPauseSimulation()
 
 void RTTGazeboEmbedded::stopHook()
 {
-    pauseSimulation();
+    if(!use_rtt_sync)
+        pauseSimulation();
 }
 
 void RTTGazeboEmbedded::checkClientConnections()
@@ -227,10 +200,14 @@ void RTTGazeboEmbedded::cleanupHook()
 {
     std::cout <<"\x1B[32m[[--- Stoping Simulation ---]]\033[0m"<<std::endl;
     gazebo::event::Events::sigInt.Signal();
+
+}
+RTTGazeboEmbedded::~RTTGazeboEmbedded()
+{
     std::cout <<"\x1B[32m[[--- Gazebo Shutdown... ---]]\033[0m"<<std::endl;
     //NOTE: This crashes as gazebo is running is a thread
-    gazebo::shutdown();
-    run_th.join();
+//     gazebo::shutdown();
+//     run_th.join();
 
     std::cout <<"\x1B[32m[[--- Exiting Gazebo ---]]\033[0m"<<std::endl;
 }
