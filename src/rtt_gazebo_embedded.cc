@@ -35,7 +35,7 @@ RTTGazeboEmbedded::RTTGazeboEmbedded(const std::string& name):
 TaskContext(name),
 world_path("worlds/empty.world"),
 use_rtt_sync(false),
-go_sem(1),
+go_sem(0),
 gravity_vector(3)
 {
     log(Info) << "Creating " << name <<" with gazebo embedded !" << endlog();
@@ -82,8 +82,8 @@ bool RTTGazeboEmbedded::configureHook()
 
     if(!world) return false;
 
-//     RTT::log(RTT::Info) << "Binding world events" << RTT::endlog();
-//     world_begin =  gazebo::event::Events::ConnectWorldUpdateBegin(std::bind(&RTTGazeboEmbedded::WorldUpdateBegin,this));
+    //RTT::log(RTT::Info) << "Binding world events" << RTT::endlog();
+    //world_begin =  gazebo::event::Events::ConnectWorldUpdateBegin(std::bind(&RTTGazeboEmbedded::WorldUpdateBegin,this));
     world_end = gazebo::event::Events::ConnectWorldUpdateEnd(std::bind(&RTTGazeboEmbedded::WorldUpdateEnd,this));
 
     return true;
@@ -181,17 +181,17 @@ void RTTGazeboEmbedded::WorldUpdateBegin()
 
 void RTTGazeboEmbedded::WorldUpdateEnd()
 {
-    checkClientConnections();
-
-    for(auto c : client_map)
-        if(getPeer(c.first)->isConfigured()
-            && getPeer(c.first)->isRunning())
-            c.second.world_end_handle = c.second.world_end.send();
-
-    for(auto c : client_map)
-        if(getPeer(c.first)->isConfigured()
-            && getPeer(c.first)->isRunning())
-            c.second.world_end_handle.collect();
+    // checkClientConnections();
+    //
+    // for(auto c : client_map)
+    //     if(getPeer(c.first)->isConfigured()
+    //         && getPeer(c.first)->isRunning())
+    //         c.second.world_end_handle = c.second.world_end.send();
+    //
+    // for(auto c : client_map)
+    //     if(getPeer(c.first)->isConfigured()
+    //         && getPeer(c.first)->isRunning())
+    //         c.second.world_end_handle.collect();
 
     if(use_rtt_sync)
         go_sem.wait();
