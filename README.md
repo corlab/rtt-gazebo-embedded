@@ -4,17 +4,17 @@ Simple [Gazebo stand alone](https://bitbucket.org/osrf/gazebo/src/d3b06088be22a1
 
 ## Design
 
-A gazebo instance is launch with the RTTGazeboEmbedded component, which provides
-a method to get the pointer to a specific model.
+A gazebo instance is launched with the ```RTTGazeboEmbedded``` component, which allows **any** components living in the same deployer to access the gazebo API (get world, model, time etc).
 
-Then you just have to create an orocos TaskContext and bind those two functions :
+In your own TaskContext, you can (for example) bind those two functions :
 
-```
+```cpp
 gazebo::event::Events::ConnectWorldUpdateBegin(std::bind(&MyModel::WorldUpdateBegin,this));
 
 gazebo::event::Events::ConnectWorldUpdateEnd(std::bind(&MyModel::WorldUpdateEnd,this));
 ```
 
+And you'll get updates at each gazebo timestep. Take a look at the ```example/``` component for a demo.
 
 ## Tutorial
 
