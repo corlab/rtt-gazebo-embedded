@@ -22,6 +22,7 @@ public:
     void addPlugin(const std::string& filename);
     void setWorldFilePath(const std::string& file_path);
     bool configureHook();
+    bool spawnModel(const std::string& instanceName, const std::string& modelName);
 
     ~RTTGazeboEmbedded();
 
@@ -52,6 +53,8 @@ protected:
     RTT::os::Semaphore go_sem;
 
     std::thread run_th;
+
+    bool isWorldConfigured;
 
     // Useful for threaded updates
     struct ClientConnection
