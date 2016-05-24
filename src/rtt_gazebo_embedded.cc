@@ -70,7 +70,7 @@ void RTTGazeboEmbedded::setWorldFilePath(const std::string& file_path) {
 bool RTTGazeboEmbedded::toggleDynamicsSimulation(const bool activate) {
 	if (!isWorldConfigured) {
 		std::cout
-				<< "\x1B[32m[[--- You have to configure this component first! ---]]\033[0m"
+				<< "\x1B[33m[[--- You have to configure this component first! ---]]\033[0m"
 				<< std::endl;
 		return false;
 	}
@@ -112,7 +112,7 @@ bool RTTGazeboEmbedded::spawnModel(const std::string& instanceName,
 		const std::string& modelName) {
 	if (!isWorldConfigured) {
 		std::cout
-				<< "\x1B[32m[[--- You have to configure this component first! ---]]\033[0m"
+				<< "\x1B[33m[[--- You have to configure this component first! ---]]\033[0m"
 				<< std::endl;
 		return false;
 	}
@@ -134,7 +134,7 @@ bool RTTGazeboEmbedded::spawnModel(const std::string& instanceName,
 		std::ifstream ifsSDF((path + "/model.sdf").c_str());
 		if (!ifsSDF) {
 			std::cout
-					<< "\x1B[32m[[--- Can't be parsed: No model.urdf or model.sdf found! ---]]\033[0m"
+					<< "\x1B[31m[[--- Can't be parsed: No model.urdf or model.sdf found! ---]]\033[0m"
 					<< std::endl;
 			return false;
 		} else {
@@ -155,7 +155,7 @@ bool RTTGazeboEmbedded::spawnModel(const std::string& instanceName,
 		nameElement = gazebo_model_xml.FirstChildElement("model");
 		if (!nameElement) {
 			std::cout
-					<< "\x1B[32m[[--- Can't be parsed: No <model> or <robot> tag found! ---]]\033[0m"
+					<< "\x1B[31m[[--- Can't be parsed: No <model> or <robot> tag found! ---]]\033[0m"
 					<< std::endl;
 			return false;
 		} else {
