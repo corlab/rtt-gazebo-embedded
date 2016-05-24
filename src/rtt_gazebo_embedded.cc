@@ -46,6 +46,10 @@ RTTGazeboEmbedded::RTTGazeboEmbedded(const std::string& name) :
 			RTT::OwnThread).doc(
 			"The instance name of the model to be spawned and then the model name.");
 
+	this->addOperation("toggleDynamicsSimulation", &RTTGazeboEmbedded::toggleDynamicsSimulation, this,
+				RTT::OwnThread).doc(
+				"Activate or Deactivate the physics engine of Gazebo.");
+
 	gazebo::printVersion();
 #ifdef GAZEBO_GREATER_6
 	gazebo::common::Console::SetQuiet(false);
@@ -62,6 +66,18 @@ void RTTGazeboEmbedded::setWorldFilePath(const std::string& file_path) {
 		RTT::log(RTT::Error) << "File " << file_path << "does not exists."
 				<< RTT::endlog();
 }
+
+bool RTTGazeboEmbedded::toggleDynamicsSimulation(const bool activate) {
+	if (!isWorldConfigured) {
+		std::cout
+				<< "\x1B[32m[[--- You have to configure this component first! ---]]\033[0m"
+				<< std::endl;
+		return false;
+	}
+	world->EnablePhysicsEngine(activate);
+	return true;
+}
+
 bool RTTGazeboEmbedded::configureHook() {
 	RTT::log(RTT::Info) << "Creating world at " << world_path << RTT::endlog();
 

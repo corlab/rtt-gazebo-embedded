@@ -23,6 +23,7 @@ public:
     void setWorldFilePath(const std::string& file_path);
     bool configureHook();
     bool spawnModel(const std::string& instanceName, const std::string& modelName);
+    bool toggleDynamicsSimulation(const bool activate);
 
     ~RTTGazeboEmbedded();
 
