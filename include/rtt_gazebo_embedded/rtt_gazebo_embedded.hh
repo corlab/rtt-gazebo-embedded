@@ -22,7 +22,9 @@ public:
     void addPlugin(const std::string& filename);
     void setWorldFilePath(const std::string& file_path);
     bool configureHook();
-    bool spawnModel(const std::string& instanceName, const std::string& modelName);
+//    bool spawnModel(const std::string& instanceName, const std::string& modelName);
+    bool spawnModel(const std::string& instanceName,
+    		const std::string& modelName, const int timeoutSec);
     bool toggleDynamicsSimulation(const bool activate);
 
     ~RTTGazeboEmbedded();

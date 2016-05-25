@@ -46,9 +46,9 @@ RTTGazeboEmbedded::RTTGazeboEmbedded(const std::string& name) :
 			RTT::OwnThread).doc(
 			"The instance name of the model to be spawned and then the model name.");
 
-	this->addOperation("toggleDynamicsSimulation", &RTTGazeboEmbedded::toggleDynamicsSimulation, this,
-				RTT::OwnThread).doc(
-				"Activate or Deactivate the physics engine of Gazebo.");
+	this->addOperation("toggleDynamicsSimulation",
+			&RTTGazeboEmbedded::toggleDynamicsSimulation, this, RTT::OwnThread).doc(
+			"Activate or Deactivate the physics engine of Gazebo.");
 
 	gazebo::printVersion();
 #ifdef GAZEBO_GREATER_6
@@ -109,7 +109,7 @@ bool RTTGazeboEmbedded::configureHook() {
 }
 
 bool RTTGazeboEmbedded::spawnModel(const std::string& instanceName,
-		const std::string& modelName) {
+		const std::string& modelName, const int timeoutSec) {
 	if (!isWorldConfigured) {
 		std::cout
 				<< "\x1B[33m[[--- You have to configure this component first! ---]]\033[0m"
@@ -182,6 +182,31 @@ bool RTTGazeboEmbedded::spawnModel(const std::string& instanceName,
 	gazebo_model_xml.Accept(&printer);
 
 	world->InsertModelString(printer.CStr());
+
+	gazebo::common::Time timeout((double)timeoutSec);
+
+	boost::shared_ptr<gazebo::common::Timer> modelDeployTimer(
+			new gazebo::common::Timer());
+
+	modelDeployTimer->Start();
+	while (modelDeployTimer->GetRunning()) {
+		if (modelDeployTimer->GetElapsed() > timeout) {
+			gzerr
+					<< "SpawnModel: Model pushed to spawn queue, but spawn service timed out waiting for model to appear in simulation under the name "
+					<< instanceName << endl;
+			modelDeployTimer->Stop();
+			return false;
+		}
+
+		{
+			//boost::recursive_mutex::scoped_lock lock(*world->GetMRMutex());
+			if (world->GetModel(instanceName)) {
+				modelDeployTimer->Stop();
+				break;
+			}
+		}
+		usleep(2000);
+	}
 
 	return true;
 
