@@ -32,40 +32,24 @@ loadComponent("gazebo","RTTGazeboEmbedded")
 setActivity("gazebo",0,10,ORO_SCHED_OTHER)
 
 # This is optional
-gazebo.argv = strings("--verbose","--record_encoding=zlib")
-
-# Load the world file (ex pr2 model, but it can be "worlds/empty.world" also)
-gazebo.world_path = "/usr/share/gazebo-7/worlds/pr2.world"
-
-# Load the ROS plugins
-gazebo.add_plugin("libgazebo_ros_paths_plugin.so")
-gazebo.add_plugin("libgazebo_ros_api_plugin.so")
-
+gazebo.argv = strings("--verbose","-s .../librtt_gazebo_system.so")
 
 gazebo.configure()
 
 gazebo.start()
 
-# If your model is not already loaded, you can spawn it like this :
-# rosrun gazebo_ros spawn_model -param robot_description -urdf -model my_model
+gazebo.toggleDynamicsSimulation(false)
 
+# Loading the model
+gazebo.spawn_model("kuka-lwr", "model://kuka-lwr-4plus", 10)
 
-# Loading the model interface
+import("rtt-gazebo-lwr4plus-sim")
+loadComponent("lwr_gazebo","lwr::LWR4plusSim")
+setActivity("lwr_gazebo",0,11,ORO_SCHED_OTHER)
+lwr_gazebo.misc.setUrdfPath(".../model.urdf")
 
-import("rtt_gazebo_embedded")
-
-# The component is also aperiodic,
-# WorldUpdateBegin and End will be called by gazebo
-
-loadComponent("pr2","ModelPluginExample")
-connectPeers("pr2","gazebo")
-
-# Get the gazebo model, timeout 10s
-# By default, the name of the orocos component
-# should be the name of the loaded model
-
-pr2.configure()
-
-pr2.start()
+lwr_gazebo.getModel("","kuka-lwr",4)
+lwr_gazebo.configure()
+gazebo.toggleDynamicsSimulation(true)
 
 ```
