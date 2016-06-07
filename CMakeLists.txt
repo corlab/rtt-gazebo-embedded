@@ -6,9 +6,16 @@ set(CMAKE_BUILD_TYPE Release)
 
 set(CMAKE_CXX_FLAGS "-std=c++11")
 
+
+
+# okay, this is a truely scary hack. Apperantly there is a bug in rtt. 
+if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+    add_definitions(-DBOOST_DATE_TIME_POSIX_TIME_STD_CONFIG)
+endif()
+
 find_package(gazebo REQUIRED)
 
-find_package(OROCOS-RTT REQUIRED COMPONENTS rtt-scripting rtt-transport-corba rtt-typekit)
+find_package(OROCOS-RTT REQUIRED COMPONENTS rtt-scripting rtt-typekit)
 if (NOT OROCOS-RTT_FOUND)
   message (FATAL_ERROR "\nCould not find Orocos-RTT. Please use the shell command\n 'source orocos_toolchain/env.sh' and then run cmake again.")
 endif()
