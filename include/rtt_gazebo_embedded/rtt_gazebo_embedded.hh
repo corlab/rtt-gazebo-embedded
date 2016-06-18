@@ -32,6 +32,7 @@ public:
 protected:
     void WorldUpdateBegin();
     void WorldUpdateEnd();
+    void OnPause(const bool _pause);
 
     bool startHook();
     void runWorldForever();
@@ -49,6 +50,7 @@ protected:
     gazebo::physics::WorldPtr world;
     gazebo::event::ConnectionPtr world_begin;
     gazebo::event::ConnectionPtr world_end;
+    gazebo::event::ConnectionPtr _pause;
 
     std::vector<double> gravity_vector;
     std::vector<std::string> argv;
@@ -56,6 +58,8 @@ protected:
     RTT::os::Semaphore go_sem;
 
     std::thread run_th;
+
+    boost::atomic<bool> _is_paused;
 
     bool isWorldConfigured;
 

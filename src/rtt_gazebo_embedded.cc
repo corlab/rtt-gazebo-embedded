@@ -30,7 +30,7 @@ bool setupServer(const std::vector<std::string> &_args) {
 
 RTTGazeboEmbedded::RTTGazeboEmbedded(const std::string& name) :
 		TaskContext(name), world_path("worlds/empty.world"), use_rtt_sync(
-		false), go_sem(0), gravity_vector(3), isWorldConfigured(false) {
+		false), go_sem(0), gravity_vector(3), isWorldConfigured(false), _is_paused(true) {
 
 	log(Info) << "Creating " << name << " with gazebo embedded !" << endlog();
 	this->addProperty("use_rtt_sync", use_rtt_sync).doc(
@@ -105,7 +105,25 @@ bool RTTGazeboEmbedded::configureHook() {
 	world_end = gazebo::event::Events::ConnectWorldUpdateEnd(
 			std::bind(&RTTGazeboEmbedded::WorldUpdateEnd, this));
 
+
+	_pause = gazebo::event::Events::ConnectPause(
+				boost::bind(&RTTGazeboEmbedded::OnPause, this, _1));
+
 	return true;
+}
+
+void RTTGazeboEmbedded::OnPause(const bool _pause) {
+	if (_pause) {
+		if (this->isRunning()) {
+			if (!_is_paused)
+				this->stop();
+		}
+	} else {
+		if (!this->isRunning()) {
+			if (_is_paused)
+				this->start();
+		}
+	}
 }
 
 bool RTTGazeboEmbedded::spawnModel(const std::string& instanceName,
@@ -216,6 +234,7 @@ bool RTTGazeboEmbedded::startHook() {
 		run_th = std::thread(
 				std::bind(&RTTGazeboEmbedded::runWorldForever, this));
 	else {
+		_is_paused=false;
 		unPauseSimulation();
 	}
 	return true;
@@ -233,16 +252,20 @@ void RTTGazeboEmbedded::updateHook() {
 }
 void RTTGazeboEmbedded::pauseSimulation() {
 	std::cout << "\x1B[32m[[--- Pausing Simulation ---]]\033[0m" << std::endl;
+//	world->SetPaused(true);
 	gazebo::event::Events::pause.Signal(true);
 }
 void RTTGazeboEmbedded::unPauseSimulation() {
 	std::cout << "\x1B[32m[[--- Unpausing Simulation ---]]\033[0m" << std::endl;
+//	world->SetPaused(false);
 	gazebo::event::Events::pause.Signal(false);
 }
 
 void RTTGazeboEmbedded::stopHook() {
-	if (!use_rtt_sync)
+	if (!use_rtt_sync) {
+		_is_paused=true;
 		pauseSimulation();
+	}
 }
 
 void RTTGazeboEmbedded::checkClientConnections() {
@@ -306,6 +329,10 @@ void RTTGazeboEmbedded::WorldUpdateEnd() {
 		go_sem.wait();
 }
 void RTTGazeboEmbedded::cleanupHook() {
+	if (isWorldConfigured) {
+		if (world)
+			world->Fini();
+	}
 	isWorldConfigured = false;
 	std::cout << "\x1B[32m[[--- Stoping Simulation ---]]\033[0m" << std::endl;
 	gazebo::event::Events::sigInt.Signal();
@@ -313,9 +340,10 @@ void RTTGazeboEmbedded::cleanupHook() {
 }
 RTTGazeboEmbedded::~RTTGazeboEmbedded() {
 	std::cout << "\x1B[32m[[--- Gazebo Shutdown... ---]]\033[0m" << std::endl;
-//NOTE: This crashes as gazebo is running as a thread
-//     gazebo::shutdown();
-//     run_th.join();
+
+	gazebo::shutdown();
+	if (run_th.joinable())
+		run_th.join();
 
 	std::cout << "\x1B[32m[[--- Exiting Gazebo ---]]\033[0m" << std::endl;
 }
