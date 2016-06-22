@@ -34,6 +34,9 @@ protected:
     void WorldUpdateEnd();
     void OnPause(const bool _pause);
 
+    bool resetModelPoses();
+    bool resetWorld();
+
     bool startHook();
     void runWorldForever();
     void updateHook();

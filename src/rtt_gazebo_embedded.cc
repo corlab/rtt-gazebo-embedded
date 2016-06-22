@@ -30,7 +30,8 @@ bool setupServer(const std::vector<std::string> &_args) {
 
 RTTGazeboEmbedded::RTTGazeboEmbedded(const std::string& name) :
 		TaskContext(name), world_path("worlds/empty.world"), use_rtt_sync(
-		false), go_sem(0), gravity_vector(3), isWorldConfigured(false), _is_paused(true) {
+		false), go_sem(0), gravity_vector(3), isWorldConfigured(false), _is_paused(
+		true) {
 
 	log(Info) << "Creating " << name << " with gazebo embedded !" << endlog();
 	this->addProperty("use_rtt_sync", use_rtt_sync).doc(
@@ -46,6 +47,12 @@ RTTGazeboEmbedded::RTTGazeboEmbedded(const std::string& name) :
 			RTT::OwnThread).doc(
 			"The instance name of the model to be spawned and then the model name.");
 
+	this->addOperation("reset_model_poses", &RTTGazeboEmbedded::resetModelPoses,
+			this, RTT::OwnThread).doc("Resets the model poses.");
+
+	this->addOperation("reset_world", &RTTGazeboEmbedded::resetWorld,
+				this, RTT::OwnThread).doc("Resets the entire world and time.");
+
 	this->addOperation("toggleDynamicsSimulation",
 			&RTTGazeboEmbedded::toggleDynamicsSimulation, this, RTT::OwnThread).doc(
 			"Activate or Deactivate the physics engine of Gazebo.");
@@ -59,6 +66,31 @@ RTTGazeboEmbedded::RTTGazeboEmbedded(const std::string& name) :
 void RTTGazeboEmbedded::addPlugin(const std::string& filename) {
 	gazebo::addPlugin(filename);
 }
+
+bool RTTGazeboEmbedded::resetModelPoses() {
+	if (world) {
+		this->world->ResetEntities(gazebo::physics::Base::MODEL);
+		return true;
+	} else {
+		RTT::log(RTT::Warning)
+				<< "The world pointer was not yet retrieved. This needs to be done first, in order to be able to call this operation."
+				<< RTT::endlog();
+		return false;
+	}
+}
+
+bool RTTGazeboEmbedded::resetWorld() {
+	if (world) {
+		this->world->Reset();
+		return true;
+	} else {
+		RTT::log(RTT::Warning)
+				<< "The world pointer was not yet retrieved. This needs to be done first, in order to be able to call this operation."
+				<< RTT::endlog();
+		return false;
+	}
+}
+
 void RTTGazeboEmbedded::setWorldFilePath(const std::string& file_path) {
 	if (std::ifstream(file_path))
 		world_path = file_path;
@@ -105,9 +137,8 @@ bool RTTGazeboEmbedded::configureHook() {
 	world_end = gazebo::event::Events::ConnectWorldUpdateEnd(
 			std::bind(&RTTGazeboEmbedded::WorldUpdateEnd, this));
 
-
 	_pause = gazebo::event::Events::ConnectPause(
-				boost::bind(&RTTGazeboEmbedded::OnPause, this, _1));
+			boost::bind(&RTTGazeboEmbedded::OnPause, this, _1));
 
 	return true;
 }
@@ -201,7 +232,7 @@ bool RTTGazeboEmbedded::spawnModel(const std::string& instanceName,
 
 	world->InsertModelString(printer.CStr());
 
-	gazebo::common::Time timeout((double)timeoutSec);
+	gazebo::common::Time timeout((double) timeoutSec);
 
 	boost::shared_ptr<gazebo::common::Timer> modelDeployTimer(
 			new gazebo::common::Timer());
@@ -234,7 +265,7 @@ bool RTTGazeboEmbedded::startHook() {
 		run_th = std::thread(
 				std::bind(&RTTGazeboEmbedded::runWorldForever, this));
 	else {
-		_is_paused=false;
+		_is_paused = false;
 		unPauseSimulation();
 	}
 	return true;
@@ -263,7 +294,7 @@ void RTTGazeboEmbedded::unPauseSimulation() {
 
 void RTTGazeboEmbedded::stopHook() {
 	if (!use_rtt_sync) {
-		_is_paused=true;
+		_is_paused = true;
 		pauseSimulation();
 	}
 }
