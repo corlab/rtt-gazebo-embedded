@@ -51,10 +51,10 @@ RTTGazeboEmbedded::RTTGazeboEmbedded(const std::string& name) :
 			this, RTT::OwnThread).doc("Resets the model poses.");
 
 	this->addOperation("reset_world", &RTTGazeboEmbedded::resetWorld,
-				this, RTT::OwnThread).doc("Resets the entire world and time.");
+				this, RTT::ClientThread).doc("Resets the entire world and time.");
 
 	this->addOperation("toggleDynamicsSimulation",
-			&RTTGazeboEmbedded::toggleDynamicsSimulation, this, RTT::OwnThread).doc(
+			&RTTGazeboEmbedded::toggleDynamicsSimulation, this, RTT::ClientThread).doc(
 			"Activate or Deactivate the physics engine of Gazebo.");
 
 	gazebo::printVersion();
