@@ -261,9 +261,11 @@ bool RTTGazeboEmbedded::spawnModel(const std::string& instanceName,
 
 }
 bool RTTGazeboEmbedded::startHook() {
-	if (!run_th.joinable())
+	if (!run_th.joinable()){
 		run_th = std::thread(
 				std::bind(&RTTGazeboEmbedded::runWorldForever, this));
+		gazebo::sensors::run_threads();
+	}
 	else {
 		_is_paused = false;
 		unPauseSimulation();
@@ -355,7 +357,7 @@ void RTTGazeboEmbedded::WorldUpdateEnd() {
 //     if(getPeer(c.first)->isConfigured()
 //         && getPeer(c.first)->isRunning())
 //         c.second.world_end_handle.collect();
-
+	gazebo::sensors::run_once();
 	if (use_rtt_sync)
 		go_sem.wait();
 }
