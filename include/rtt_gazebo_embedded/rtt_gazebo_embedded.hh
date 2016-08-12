@@ -26,6 +26,11 @@ public:
 //    bool spawnModel(const std::string& instanceName, const std::string& modelName);
     bool spawnModel(const std::string& instanceName,
     		const std::string& modelName, const int timeoutSec);
+
+    bool spawnModelAtPos(const std::string& instanceName,
+			const std::string& modelName, double x,
+			double y, double z);
+
     bool toggleDynamicsSimulation(const bool activate);
 
     ~RTTGazeboEmbedded();
@@ -82,6 +87,21 @@ protected:
     };
 
     std::map<std::string,ClientConnection> client_map;
+
+
+private:
+	bool spawnModelInternal(const std::string& instanceName,
+			const std::string& modelName, const int timeoutSec, double x,
+			double y, double z);
+	void handleURDF(TiXmlElement* robotElement,
+			gazebo::math::Vector3 initial_xyz,
+			gazebo::math::Quaternion initial_q);
+	void handleSDF(sdf::ElementPtr modelElement,
+			gazebo::math::Vector3 initial_xyz,
+			gazebo::math::Quaternion initial_q);
+	gazebo::math::Vector3 parseVector3(const std::string &str);
+	gazebo::math::Pose parsePose(const std::string &str);
+
 };
 
 #endif

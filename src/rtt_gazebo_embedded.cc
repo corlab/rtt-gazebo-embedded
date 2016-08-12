@@ -47,6 +47,14 @@ RTTGazeboEmbedded::RTTGazeboEmbedded(const std::string& name) :
 			RTT::OwnThread).doc(
 			"The instance name of the model to be spawned and then the model name.");
 
+	this->addOperation("spawn_model_at_pos", &RTTGazeboEmbedded::spawnModelAtPos, this,
+			RTT::OwnThread).doc("Spawning an URDF/SRDF model at a specific position in the world.")
+					.arg("instanceName", "instance name")
+					.arg("modelName", "model to spawn (i.e. model://iit-coman)")
+					.arg("x", "spawning coordinate X")
+					.arg("y", "spawning coordinate Y")
+					.arg("z", "spawning coordinate Z");
+
 	this->addOperation("reset_model_poses", &RTTGazeboEmbedded::resetModelPoses,
 			this, RTT::OwnThread).doc("Resets the model poses.");
 
@@ -157,17 +165,36 @@ void RTTGazeboEmbedded::OnPause(const bool _pause) {
 	}
 }
 
+
 bool RTTGazeboEmbedded::spawnModel(const std::string& instanceName,
 		const std::string& modelName, const int timeoutSec) {
+	return spawnModelInternal(instanceName, modelName, timeoutSec, 0.0, 0.0,
+			0.0);
+}
+
+bool RTTGazeboEmbedded::spawnModelAtPos(const std::string& instanceName,
+		const std::string& modelName, double x, double y,
+		double z) {
+	return spawnModelInternal(instanceName, modelName, 10, x, y, z);
+}
+
+bool RTTGazeboEmbedded::spawnModelInternal(const std::string& instanceName,
+		const std::string& modelName, const int timeoutSec, double x, double y,
+		double z) {
 	if (!isWorldConfigured) {
 		std::cout
 				<< "\x1B[33m[[--- You have to configure this component first! ---]]\033[0m"
 				<< std::endl;
 		return false;
 	}
-//
-//	gazebo::common::ModelDatabase* modelDatabaseInst =
-//			gazebo::common::ModelDatabase::Instance();
+
+	gazebo::math::Vector3 initial_xyz(x, y, z);
+	// get initial roll pitch yaw (fixed frame transform) (wxyz)
+	gazebo::math::Quaternion initial_q(1, 0, 0, 0);
+
+	//
+	//	gazebo::common::ModelDatabase* modelDatabaseInst =
+	//			gazebo::common::ModelDatabase::Instance();
 
 	//check if file exists
 	const string path = gazebo::common::SystemPaths::Instance()->FindFileURI(
@@ -213,6 +240,8 @@ bool RTTGazeboEmbedded::spawnModel(const std::string& instanceName,
 			root.SetFromString(model_xml);
 			sdf::ElementPtr nameElementSDF = root.Root()->GetElement("model");
 			nameElementSDF->GetAttribute("name")->SetFromString(instanceName);
+
+			handleSDF(nameElementSDF, initial_xyz, initial_q);
 		}
 	} else {
 		// handle urdf
@@ -223,9 +252,12 @@ bool RTTGazeboEmbedded::spawnModel(const std::string& instanceName,
 		}
 		// replace with user specified name
 		nameElement->SetAttribute("name", instanceName);
+
+		// change initital pos and rot
+		handleURDF(nameElement, initial_xyz, initial_q);
 	}
 
-//	world->InsertModelFile(modelName);
+	//	world->InsertModelFile(modelName);
 	TiXmlPrinter printer;
 	printer.SetIndent("    ");
 	gazebo_model_xml.Accept(&printer);
@@ -260,6 +292,134 @@ bool RTTGazeboEmbedded::spawnModel(const std::string& instanceName,
 	return true;
 
 }
+
+void RTTGazeboEmbedded::handleSDF(sdf::ElementPtr modelElement, gazebo::math::Vector3 initial_xyz, gazebo::math::Quaternion initial_q) {
+	sdf::ElementPtr pose_element;
+
+	// Check for the pose element
+	pose_element = modelElement->GetElement("pose");
+	gazebo::math::Pose model_pose;
+
+	// Create the pose element if it doesn't exist
+	// Remove it if it exists, since we are inserting a new one
+	if (pose_element) {
+		// save pose_element in math::Pose and remove child
+		model_pose = this->parsePose(pose_element->Get<std::string>());
+		modelElement->RemoveChild(pose_element);
+	}
+
+	// add pose_element Pose to initial pose
+	gazebo::math::Pose new_model_pose = model_pose + gazebo::math::Pose(initial_xyz, initial_q);
+
+	// Create the string of 6 numbers
+	std::ostringstream pose_stream;
+	gazebo::math::Vector3 model_rpy = model_pose.rot.GetAsEuler(); // convert to Euler angles for Gazebo XML
+	pose_stream << model_pose.pos.x << " " << model_pose.pos.y
+			<< " " << model_pose.pos.z << " " << model_rpy.x << " "
+			<< model_rpy.y << " " << model_rpy.z;
+
+	// Add value to pose element
+//	TiXmlText* text = new TiXmlText(pose_stream.str());
+	sdf::ElementPtr new_pose_element = modelElement->AddElement("pose");
+//	sdf::ElementPtr new_pose_element = new TiXmlElement("pose");
+	new_pose_element->Set<std::string>(pose_stream.str());
+//	new_pose_element->LinkEndChild(text);
+//	modelElement->LinkEndChild(new_pose_element);
+//	modelElement->InsertElement(new_pose_element);
+}
+
+gazebo::math::Pose RTTGazeboEmbedded::parsePose(const string &str) {
+	std::vector<std::string> pieces;
+	std::vector<double> vals;
+
+	boost::split(pieces, str, boost::is_any_of(" "));
+	for (unsigned int i = 0; i < pieces.size(); ++i) {
+		if (pieces[i] != "") {
+			try {
+				vals.push_back(boost::lexical_cast<double>(pieces[i].c_str()));
+			} catch (boost::bad_lexical_cast &e) {
+				log(Error) << "xml key [" << str << "][" << i << "] value ["
+						<< pieces[i]
+						<< "] is not a valid double from a 3-tuple" << endlog();
+				return gazebo::math::Pose();
+			}
+		}
+	}
+
+	if (vals.size() == 6)
+		return gazebo::math::Pose(vals[0], vals[1], vals[2], vals[3], vals[4],
+				vals[5]);
+	else {
+		log(Error) << "Beware: failed to parse string " << str.c_str()
+				<< " as gazebo::math::Pose, returning zeros." << endlog();
+		return gazebo::math::Pose();
+	}
+}
+
+void RTTGazeboEmbedded::handleURDF(TiXmlElement* robotElement, gazebo::math::Vector3 initial_xyz, gazebo::math::Quaternion initial_q) {
+	// find first instance of xyz and rpy, replace with initial pose
+	TiXmlElement* origin_key = robotElement->FirstChildElement("origin");
+
+	// if there is no origin tag then create one
+	if (!origin_key) {
+		origin_key = new TiXmlElement("origin");
+		robotElement->LinkEndChild(origin_key);
+	}
+
+	gazebo::math::Vector3 xyz;
+	gazebo::math::Vector3 rpy;
+	if (origin_key->Attribute("xyz")) {
+		xyz = this->parseVector3(origin_key->Attribute("xyz"));
+		origin_key->RemoveAttribute("xyz");
+	}
+	if (origin_key->Attribute("rpy")) {
+		rpy = this->parseVector3(origin_key->Attribute("rpy"));
+		origin_key->RemoveAttribute("rpy");
+	}
+
+	// add xyz, rpy to initial pose
+	gazebo::math::Pose model_pose = gazebo::math::Pose(xyz, rpy)
+			+ gazebo::math::Pose(initial_xyz, initial_q);
+
+	std::ostringstream xyz_stream;
+	xyz_stream << model_pose.pos.x << " " << model_pose.pos.y << " "
+			<< model_pose.pos.z;
+
+	std::ostringstream rpy_stream;
+	gazebo::math::Vector3 model_rpy = model_pose.rot.GetAsEuler(); // convert to Euler angles for URDF/SDF XML
+	rpy_stream << model_rpy.x << " " << model_rpy.y << " " << model_rpy.z;
+
+	origin_key->SetAttribute("xyz", xyz_stream.str());
+	origin_key->SetAttribute("rpy", rpy_stream.str());
+}
+
+gazebo::math::Vector3 RTTGazeboEmbedded::parseVector3(const string &str) {
+	std::vector<std::string> pieces;
+	std::vector<double> vals;
+
+	boost::split(pieces, str, boost::is_any_of(" "));
+	for (unsigned int i = 0; i < pieces.size(); ++i) {
+		if (pieces[i] != "") {
+			try {
+				vals.push_back(boost::lexical_cast<double>(pieces[i].c_str()));
+			} catch (boost::bad_lexical_cast &e) {
+				log(Error) << "xml key [" << str << "][" << i << "] value ["
+						<< pieces[i]
+						<< "] is not a valid double from a 3-tuple" << endlog();
+				return gazebo::math::Vector3();
+			}
+		}
+	}
+
+	if (vals.size() == 3)
+		return gazebo::math::Vector3(vals[0], vals[1], vals[2]);
+	else {
+		log(Warning) << "Beware: failed to parse string " << str.c_str()
+				<< " as gazebo::math::Vector3, returning zeros." << endlog();
+		return gazebo::math::Vector3();
+	}
+}
+
 bool RTTGazeboEmbedded::startHook() {
 	if (!run_th.joinable()){
 		run_th = std::thread(
