@@ -1,4 +1,5 @@
 #include <rtt_gazebo_embedded/rtt_gazebo_embedded.hh>
+#include <boost/algorithm/string.hpp>
 
 using namespace RTT;
 using namespace RTT::os;
