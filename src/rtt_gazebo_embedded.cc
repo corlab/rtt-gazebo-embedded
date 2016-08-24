@@ -31,8 +31,8 @@ bool setupServer(const std::vector<std::string> &_args) {
 
 RTTGazeboEmbedded::RTTGazeboEmbedded(const std::string& name) :
 		TaskContext(name), world_path("worlds/empty.world"), use_rtt_sync(
-		false), go_sem(0), gravity_vector(3), isWorldConfigured(false), _is_paused(
-		true) {
+				false), go_sem(0), gravity_vector(3), isWorldConfigured(false), _is_paused(
+				true) {
 
 	log(Info) << "Creating " << name << " with gazebo embedded !" << endlog();
 	this->addProperty("use_rtt_sync", use_rtt_sync).doc(
@@ -48,23 +48,31 @@ RTTGazeboEmbedded::RTTGazeboEmbedded(const std::string& name) :
 			RTT::OwnThread).doc(
 			"The instance name of the model to be spawned and then the model name.");
 
-	this->addOperation("spawn_model_at_pos", &RTTGazeboEmbedded::spawnModelAtPos, this,
-			RTT::OwnThread).doc("Spawning an URDF/SRDF model at a specific position in the world.")
-					.arg("instanceName", "instance name")
-					.arg("modelName", "model to spawn (i.e. model://iit-coman)")
-					.arg("x", "spawning coordinate X")
-					.arg("y", "spawning coordinate Y")
-					.arg("z", "spawning coordinate Z");
+	this->addOperation("spawn_model_at_pos",
+			&RTTGazeboEmbedded::spawnModelAtPos, this, RTT::OwnThread).doc(
+			"Spawning an URDF/SRDF model at a specific position in the world.").arg(
+			"instanceName", "instance name").arg("modelName",
+			"model to spawn (i.e. model://iit-coman)").arg("x",
+			"spawning coordinate X").arg("y", "spawning coordinate Y").arg("z",
+			"spawning coordinate Z");
 
 	this->addOperation("reset_model_poses", &RTTGazeboEmbedded::resetModelPoses,
 			this, RTT::OwnThread).doc("Resets the model poses.");
 
-	this->addOperation("reset_world", &RTTGazeboEmbedded::resetWorld,
-				this, RTT::ClientThread).doc("Resets the entire world and time.");
+	this->addOperation("reset_world", &RTTGazeboEmbedded::resetWorld, this,
+			RTT::ClientThread).doc("Resets the entire world and time.");
 
 	this->addOperation("toggleDynamicsSimulation",
-			&RTTGazeboEmbedded::toggleDynamicsSimulation, this, RTT::ClientThread).doc(
+			&RTTGazeboEmbedded::toggleDynamicsSimulation, this,
+			RTT::ClientThread).doc(
 			"Activate or Deactivate the physics engine of Gazebo.");
+
+	this->addOperation("setInitialConfigurationForModel",
+				&RTTGazeboEmbedded::setInitialConfigurationForModel, this,
+				RTT::ClientThread).doc(
+				"Set the initial joint configuration for a specific model.")
+                                                    .arg("instanceName", "model to be initialized with the joint configuration")
+                                                    .arg("jointConfig", "joint configuration inlucding all joints in the order of gazebo.");
 
 	gazebo::printVersion();
 #ifdef GAZEBO_GREATER_6
@@ -166,7 +174,6 @@ void RTTGazeboEmbedded::OnPause(const bool _pause) {
 	}
 }
 
-
 bool RTTGazeboEmbedded::spawnModel(const std::string& instanceName,
 		const std::string& modelName, const int timeoutSec) {
 	return spawnModelInternal(instanceName, modelName, timeoutSec, 0.0, 0.0,
@@ -174,9 +181,90 @@ bool RTTGazeboEmbedded::spawnModel(const std::string& instanceName,
 }
 
 bool RTTGazeboEmbedded::spawnModelAtPos(const std::string& instanceName,
-		const std::string& modelName, double x, double y,
-		double z) {
+		const std::string& modelName, double x, double y, double z) {
 	return spawnModelInternal(instanceName, modelName, 10, x, y, z);
+}
+
+bool RTTGazeboEmbedded::setInitialConfigurationForModel(
+		const std::string& instanceName,
+		const rstrt::kinematics::JointAngles& jointConfig) {
+	// check if model was spawned
+	gazebo::physics::ModelPtr model;
+	if (!(model = world->GetModel(instanceName))) {
+		RTT::log(RTT::Warning)
+				<< "Model could not be found. Perhaps it was not loaded at all before. Try using the spawn_model call."
+				<< RTT::endlog();
+		return false;
+	}
+	if (!model) {
+		RTT::log(RTT::Warning)
+				<< "Model could not be found. Perhaps it was not loaded at all before. Try using the spawn_model call."
+				<< RTT::endlog();
+		return false;
+	}
+	// pause gazebo
+            bool turnSimulationOnAfterwards = this->isRunning();
+	if (turnSimulationOnAfterwards) {
+		this->stop();
+	}
+	// disable physics
+	bool turnPhysicsOnAfterwards = world->GetEnablePhysicsEngine();
+	if (turnPhysicsOnAfterwards) {
+		toggleDynamicsSimulation(false);
+	}
+	// disable collisions
+	std::vector<gazebo::physics::JointPtr> gazebo_joints_ =
+					model->GetJoints();
+
+             // TODO make this better without twice of the calculations as it is now...
+            // count the joints to make a proper sanety check for the dimensions.
+             int count = 0;
+             for (gazebo::physics::Joint_V::iterator jit = gazebo_joints_.begin();
+                jit != gazebo_joints_.end(); ++jit) {
+                          const std::string name = (*jit)->GetName();
+                          if ((*jit)->GetLowerLimit(0u) == (*jit)->GetUpperLimit(0u)) {
+                                continue;
+                          }
+                          count++;
+             }
+
+
+	if (count == jointConfig.angles.rows()) {
+		int j = -1;
+		for (gazebo::physics::Joint_V::iterator jit = gazebo_joints_.begin();
+				jit != gazebo_joints_.end(); ++jit, ++j) {
+			const std::string name = (*jit)->GetName();
+
+
+                          if ((*jit)->GetLowerLimit(0u) == (*jit)->GetUpperLimit(0u)) {
+                                RTT::log(RTT::Info) << "Not adding (fake) fixed joint ["
+                                << name << "] j:" << j << RTT::endlog();
+                                continue;
+                          }
+
+#ifdef GAZEBO_GREATER_6
+                          std::cout << "set " << name << " to " << jointConfig.angles(j) << std::endl;
+			(*jit)->SetPosition(0, (double) jointConfig.angles(j));
+#else
+			(*jit)->SetAngle(0, (double) jointConfig.angles(j));
+#endif
+		}
+		usleep(1000);
+	} else {
+		RTT::log(RTT::Warning) << "Config size doesn't match: Received: "
+				<< jointConfig.angles.rows() << ", but expected: "
+				<< gazebo_joints_.size() << RTT::endlog();
+	}
+	// enable collisions
+
+	// enable physics again if needed
+	if (turnPhysicsOnAfterwards) {
+		toggleDynamicsSimulation(true);
+	}
+	// unpause gazebo
+            if (turnSimulationOnAfterwards) {
+                this->start();
+            }
 }
 
 bool RTTGazeboEmbedded::spawnModelInternal(const std::string& instanceName,
@@ -294,7 +382,8 @@ bool RTTGazeboEmbedded::spawnModelInternal(const std::string& instanceName,
 
 }
 
-void RTTGazeboEmbedded::handleSDF(sdf::ElementPtr modelElement, gazebo::math::Vector3 initial_xyz, gazebo::math::Quaternion initial_q) {
+void RTTGazeboEmbedded::handleSDF(sdf::ElementPtr modelElement,
+		gazebo::math::Vector3 initial_xyz, gazebo::math::Quaternion initial_q) {
 	sdf::ElementPtr pose_element;
 
 	// Check for the pose element
@@ -310,20 +399,21 @@ void RTTGazeboEmbedded::handleSDF(sdf::ElementPtr modelElement, gazebo::math::Ve
 	}
 
 	// add pose_element Pose to initial pose
-	gazebo::math::Pose new_model_pose = model_pose + gazebo::math::Pose(initial_xyz, initial_q);
+	gazebo::math::Pose new_model_pose = model_pose
+			+ gazebo::math::Pose(initial_xyz, initial_q);
 
 	// Create the string of 6 numbers
 	std::ostringstream pose_stream;
 	gazebo::math::Vector3 model_rpy = model_pose.rot.GetAsEuler(); // convert to Euler angles for Gazebo XML
-	pose_stream << model_pose.pos.x << " " << model_pose.pos.y
-			<< " " << model_pose.pos.z << " " << model_rpy.x << " "
-			<< model_rpy.y << " " << model_rpy.z;
+	pose_stream << model_pose.pos.x << " " << model_pose.pos.y << " "
+			<< model_pose.pos.z << " " << model_rpy.x << " " << model_rpy.y
+			<< " " << model_rpy.z;
 
 	// Add value to pose element
 //	TiXmlText* text = new TiXmlText(pose_stream.str());
 	sdf::ElementPtr new_pose_element = modelElement->AddElement("pose");
 //	sdf::ElementPtr new_pose_element = new TiXmlElement("pose");
-	new_pose_element->Set<std::string>(pose_stream.str());
+	new_pose_element->Set < std::string > (pose_stream.str());
 //	new_pose_element->LinkEndChild(text);
 //	modelElement->LinkEndChild(new_pose_element);
 //	modelElement->InsertElement(new_pose_element);
@@ -340,8 +430,8 @@ gazebo::math::Pose RTTGazeboEmbedded::parsePose(const string &str) {
 				vals.push_back(boost::lexical_cast<double>(pieces[i].c_str()));
 			} catch (boost::bad_lexical_cast &e) {
 				log(Error) << "xml key [" << str << "][" << i << "] value ["
-						<< pieces[i]
-						<< "] is not a valid double from a 3-tuple" << endlog();
+						<< pieces[i] << "] is not a valid double from a 3-tuple"
+						<< endlog();
 				return gazebo::math::Pose();
 			}
 		}
@@ -357,7 +447,8 @@ gazebo::math::Pose RTTGazeboEmbedded::parsePose(const string &str) {
 	}
 }
 
-void RTTGazeboEmbedded::handleURDF(TiXmlElement* robotElement, gazebo::math::Vector3 initial_xyz, gazebo::math::Quaternion initial_q) {
+void RTTGazeboEmbedded::handleURDF(TiXmlElement* robotElement,
+		gazebo::math::Vector3 initial_xyz, gazebo::math::Quaternion initial_q) {
 	// find first instance of xyz and rpy, replace with initial pose
 	TiXmlElement* origin_key = robotElement->FirstChildElement("origin");
 
@@ -405,8 +496,8 @@ gazebo::math::Vector3 RTTGazeboEmbedded::parseVector3(const string &str) {
 				vals.push_back(boost::lexical_cast<double>(pieces[i].c_str()));
 			} catch (boost::bad_lexical_cast &e) {
 				log(Error) << "xml key [" << str << "][" << i << "] value ["
-						<< pieces[i]
-						<< "] is not a valid double from a 3-tuple" << endlog();
+						<< pieces[i] << "] is not a valid double from a 3-tuple"
+						<< endlog();
 				return gazebo::math::Vector3();
 			}
 		}
@@ -422,12 +513,11 @@ gazebo::math::Vector3 RTTGazeboEmbedded::parseVector3(const string &str) {
 }
 
 bool RTTGazeboEmbedded::startHook() {
-	if (!run_th.joinable()){
+	if (!run_th.joinable()) {
 		run_th = std::thread(
 				std::bind(&RTTGazeboEmbedded::runWorldForever, this));
 		gazebo::sensors::run_threads();
-	}
-	else {
+	} else {
 		_is_paused = false;
 		unPauseSimulation();
 	}

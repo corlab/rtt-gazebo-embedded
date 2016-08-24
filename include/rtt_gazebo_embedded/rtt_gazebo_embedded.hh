@@ -13,81 +13,91 @@
 #include <rtt/Port.hpp>
 #include <rtt/os/Semaphore.hpp>
 
+// RST-RT headers
+#include <rst-rt/kinematics/JointAngles.hpp>
+
 #include <thread>
 
-
-class RTTGazeboEmbedded : public RTT::TaskContext
-{
+class RTTGazeboEmbedded: public RTT::TaskContext {
 public:
-    RTTGazeboEmbedded(const std::string& name);
-    void addPlugin(const std::string& filename);
-    void setWorldFilePath(const std::string& file_path);
-    bool configureHook();
+	RTTGazeboEmbedded(const std::string& name);
+	void addPlugin(const std::string& filename);
+	void setWorldFilePath(const std::string& file_path);
+	bool configureHook();
 //    bool spawnModel(const std::string& instanceName, const std::string& modelName);
-    bool spawnModel(const std::string& instanceName,
-    		const std::string& modelName, const int timeoutSec);
+	bool spawnModel(const std::string& instanceName,
+			const std::string& modelName, const int timeoutSec);
 
-    bool spawnModelAtPos(const std::string& instanceName,
-			const std::string& modelName, double x,
-			double y, double z);
+	bool spawnModelAtPos(const std::string& instanceName,
+			const std::string& modelName, double x, double y, double z);
 
-    bool toggleDynamicsSimulation(const bool activate);
+	/**
+	 * Sets the initial configuration for a specific model that was spawned before.
+	 *
+	 * instanceName chosen model
+	 * jointConfig  joint configuration
+	 *
+	 * returns		success or not
+	 */
+	bool setInitialConfigurationForModel(const std::string& instanceName,
+			const rstrt::kinematics::JointAngles& jointConfig);
 
-    ~RTTGazeboEmbedded();
+	bool toggleDynamicsSimulation(const bool activate);
+
+	~RTTGazeboEmbedded();
 
 protected:
-    void WorldUpdateBegin();
-    void WorldUpdateEnd();
-    void OnPause(const bool _pause);
+	void WorldUpdateBegin();
+	void WorldUpdateEnd();
+	void OnPause(const bool _pause);
 
-    bool resetModelPoses();
-    bool resetWorld();
+	bool resetModelPoses();
+	bool resetWorld();
 
-    bool startHook();
-    void runWorldForever();
-    void updateHook();
-    void stopHook();
+	bool startHook();
+	void runWorldForever();
+	void updateHook();
+	void stopHook();
 
-    void cleanupHook();
+	void cleanupHook();
 
-    void pauseSimulation();
-    void unPauseSimulation();
+	void pauseSimulation();
+	void unPauseSimulation();
 
-    void checkClientConnections();
+	void checkClientConnections();
 
-    std::string world_path;
-    gazebo::physics::WorldPtr world;
-    gazebo::event::ConnectionPtr world_begin;
-    gazebo::event::ConnectionPtr world_end;
-    gazebo::event::ConnectionPtr _pause;
+	std::string world_path;
+	gazebo::physics::WorldPtr world;
+	gazebo::event::ConnectionPtr world_begin;
+	gazebo::event::ConnectionPtr world_end;
+	gazebo::event::ConnectionPtr _pause;
 
-    std::vector<double> gravity_vector;
-    std::vector<std::string> argv;
-    bool use_rtt_sync;
-    RTT::os::Semaphore go_sem;
+	std::vector<double> gravity_vector;
+	std::vector<std::string> argv;
+	bool use_rtt_sync;
+	RTT::os::Semaphore go_sem;
 
-    std::thread run_th;
+	std::thread run_th;
 
-    boost::atomic<bool> _is_paused;
+	boost::atomic<bool> _is_paused;
 
-    bool isWorldConfigured;
+	bool isWorldConfigured;
 
-    // Useful for threaded updates
-    struct ClientConnection
-    {
-        ClientConnection(){}
-        ClientConnection(RTT::OperationCaller<void(void)> world_update_begin,
-                         RTT::OperationCaller<void(void)> world_update_end):
-                         world_begin(world_update_begin),
-                         world_end(world_update_end){}
-        RTT::OperationCaller<void(void)> world_begin;
-        RTT::OperationCaller<void(void)> world_end;
-        RTT::SendHandle<void(void)> world_begin_handle;
-        RTT::SendHandle<void(void)> world_end_handle;
-    };
+	// Useful for threaded updates
+	struct ClientConnection {
+		ClientConnection() {
+		}
+		ClientConnection(RTT::OperationCaller<void(void)> world_update_begin,
+				RTT::OperationCaller<void(void)> world_update_end) :
+				world_begin(world_update_begin), world_end(world_update_end) {
+		}
+		RTT::OperationCaller<void(void)> world_begin;
+		RTT::OperationCaller<void(void)> world_end;
+		RTT::SendHandle<void(void)> world_begin_handle;
+		RTT::SendHandle<void(void)> world_end_handle;
+	};
 
-    std::map<std::string,ClientConnection> client_map;
-
+	std::map<std::string, ClientConnection> client_map;
 
 private:
 	bool spawnModelInternal(const std::string& instanceName,
