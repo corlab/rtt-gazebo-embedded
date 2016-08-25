@@ -253,7 +253,16 @@ bool RTTGazeboEmbedded::setInitialConfigurationForModel(
 	} else {
 		RTT::log(RTT::Warning) << "Config size doesn't match: Received: "
 				<< jointConfig.angles.rows() << ", but expected: "
-				<< gazebo_joints_.size() << RTT::endlog();
+				<< count << RTT::endlog();
+
+                for (gazebo::physics::Joint_V::iterator jit = gazebo_joints_.begin();
+                jit != gazebo_joints_.end(); ++jit) {
+                          const std::string name = (*jit)->GetName();
+                          if ((*jit)->GetLowerLimit(0u) == (*jit)->GetUpperLimit(0u)) {
+                                continue;
+                          }
+                          RTT::log(RTT::Warning) << "Set Joint: " << name << RTT::endlog();
+                }
 	}
 	// enable collisions
 
