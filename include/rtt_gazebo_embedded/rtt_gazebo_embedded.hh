@@ -13,6 +13,9 @@
 #include <rtt/Port.hpp>
 #include <rtt/os/Semaphore.hpp>
 
+// TinyXML header
+#include "tinyxml.h"
+
 // RST-RT headers
 #include <rst-rt/kinematics/JointAngles.hpp>
 
