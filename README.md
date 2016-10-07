@@ -32,7 +32,9 @@ loadComponent("gazebo","RTTGazeboEmbedded")
 setActivity("gazebo",0,10,ORO_SCHED_OTHER)
 
 # This is optional
-gazebo.argv = strings("--verbose","-s .../librtt_gazebo_system.so")
+gazebo.argv = strings("--verbose")
+# Load System Plugin for Clock-Sync
+gazebo.add_plugin("libRTTGazeboClockPlugin.so")
 
 gazebo.configure()
 
