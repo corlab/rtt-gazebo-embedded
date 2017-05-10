@@ -18,6 +18,8 @@
 
 // RST-RT headers
 #include <rst-rt/kinematics/JointAngles.hpp>
+#include <rst-rt/geometry/Translation.hpp>
+#include <rst-rt/geometry/Rotation.hpp>
 
 #include <thread>
 
@@ -33,6 +35,10 @@ public:
 
 	bool spawnModelAtPos(const std::string& instanceName,
 			const std::string& modelName, double x, double y, double z);
+	bool spawnModelAtPosition(const std::string& instanceName,
+			const std::string& modelName, rstrt::geometry::Translation t);
+	bool spawnModelAtPositionAndOrientation(const std::string& instanceName,
+			const std::string& modelName, rstrt::geometry::Translation t, rstrt::geometry::Rotation r);
 
 	/**
 	 * Sets the initial configuration for a specific model that was spawned before.
@@ -105,7 +111,7 @@ protected:
 private:
 	bool spawnModelInternal(const std::string& instanceName,
 			const std::string& modelName, const int timeoutSec, double x,
-			double y, double z);
+			double y, double z, double roll, double pitch, double yaw);
 	void handleURDF(TiXmlElement* robotElement,
 			gazebo::math::Vector3 initial_xyz,
 			gazebo::math::Quaternion initial_q);
