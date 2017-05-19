@@ -56,6 +56,20 @@ RTTGazeboEmbedded::RTTGazeboEmbedded(const std::string& name) :
 			"spawning coordinate X").arg("y", "spawning coordinate Y").arg("z",
 			"spawning coordinate Z");
 
+	this->addOperation("spawn_model_at_position",
+			&RTTGazeboEmbedded::spawnModelAtPosition, this, RTT::OwnThread).doc(
+			"Spawning an URDF/SRDF model at a specific position in the world.").arg(
+			"instanceName", "instance name").arg("modelName",
+			"model to spawn (i.e. model://iit-coman)").arg("t",
+			"spawning position");
+
+	this->addOperation("spawn_model_at_position_and_orientation",
+			&RTTGazeboEmbedded::spawnModelAtPositionAndOrientation, this, RTT::OwnThread).doc(
+			"Spawning an URDF/SRDF model at a specific position and orientation in the world.").arg(
+			"instanceName", "instance name").arg("modelName",
+			"model to spawn (i.e. model://iit-coman)").arg("t",
+			"spawning position").arg("r", "spawning orientation");
+
 	this->addOperation("reset_model_poses", &RTTGazeboEmbedded::resetModelPoses,
 			this, RTT::OwnThread).doc("Resets the model poses.");
 
@@ -176,13 +190,30 @@ void RTTGazeboEmbedded::OnPause(const bool _pause) {
 
 bool RTTGazeboEmbedded::spawnModel(const std::string& instanceName,
 		const std::string& modelName, const int timeoutSec) {
-	return spawnModelInternal(instanceName, modelName, timeoutSec, 0.0, 0.0,
-			0.0);
+	gazebo::math::Quaternion initial_q(1, 0, 0, 0);
+	gazebo::math::Vector3 rpy = initial_q.GetAsEuler();
+	return spawnModelInternal(instanceName, modelName, timeoutSec, 0.0, 0.0, 0.0, rpy.x, rpy.y, rpy.z);
 }
 
 bool RTTGazeboEmbedded::spawnModelAtPos(const std::string& instanceName,
 		const std::string& modelName, double x, double y, double z) {
-	return spawnModelInternal(instanceName, modelName, 10, x, y, z);
+	gazebo::math::Quaternion initial_q(1, 0, 0, 0);
+	gazebo::math::Vector3 rpy = initial_q.GetAsEuler();
+	return spawnModelInternal(instanceName, modelName, 10, x, y, z, rpy.x, rpy.y, rpy.z);
+}
+
+bool RTTGazeboEmbedded::spawnModelAtPosition(const std::string& instanceName,
+		const std::string& modelName, rstrt::geometry::Translation t) {
+	gazebo::math::Quaternion initial_q(1, 0, 0, 0);
+	gazebo::math::Vector3 rpy = initial_q.GetAsEuler();
+	return spawnModelInternal(instanceName, modelName, 10, t.translation(0), t.translation(1), t.translation(2), rpy.x, rpy.y, rpy.z);
+}
+
+bool RTTGazeboEmbedded::spawnModelAtPositionAndOrientation(const std::string& instanceName,
+		const std::string& modelName, rstrt::geometry::Translation t, rstrt::geometry::Rotation r) {
+	gazebo::math::Quaternion initial_q(r.rotation(0), r.rotation(1), r.rotation(2), r.rotation(3));
+	gazebo::math::Vector3 rpy = initial_q.GetAsEuler();
+	return spawnModelInternal(instanceName, modelName, 10, t.translation(0), t.translation(1), t.translation(2), rpy.x, rpy.y, rpy.z);
 }
 
 bool RTTGazeboEmbedded::setInitialConfigurationForModel(
@@ -278,7 +309,7 @@ bool RTTGazeboEmbedded::setInitialConfigurationForModel(
 
 bool RTTGazeboEmbedded::spawnModelInternal(const std::string& instanceName,
 		const std::string& modelName, const int timeoutSec, double x, double y,
-		double z) {
+		double z, double roll, double pitch, double yaw) {
 	if (!isWorldConfigured) {
 		std::cout
 				<< "\x1B[33m[[--- You have to configure this component first! ---]]\033[0m"
@@ -287,8 +318,7 @@ bool RTTGazeboEmbedded::spawnModelInternal(const std::string& instanceName,
 	}
 
 	gazebo::math::Vector3 initial_xyz(x, y, z);
-	// get initial roll pitch yaw (fixed frame transform) (wxyz)
-	gazebo::math::Quaternion initial_q(1, 0, 0, 0);
+	gazebo::math::Quaternion initial_q(roll, pitch, yaw);
 
 	//
 	//	gazebo::common::ModelDatabase* modelDatabaseInst =
