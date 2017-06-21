@@ -26,6 +26,7 @@ if(${GAZEBO_VERSION} AND ${GAZEBO_VERSION} GREATER 6)
     add_definitions(-DGAZEBO_GREATER_6)
 endif()
 
+find_package(YCM QUIET)
 find_package(PkgConfig REQUIRED)
 pkg_search_module(TINYXML REQUIRED tinyxml)
 if(NOT TINYXML_INCLUDE_DIR)
