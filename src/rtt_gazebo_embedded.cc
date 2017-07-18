@@ -71,7 +71,7 @@ RTTGazeboEmbedded::RTTGazeboEmbedded(const std::string& name) :
 			"spawning position").arg("r", "spawning orientation");
 
 	this->addOperation("reset_model_poses", &RTTGazeboEmbedded::resetModelPoses,
-			this, RTT::OwnThread).doc("Resets the model poses.");
+			this, RTT::ClientThread).doc("Resets the model poses.");
 
 	this->addOperation("reset_world", &RTTGazeboEmbedded::resetWorld, this,
 			RTT::ClientThread).doc("Resets the entire world and time.");
