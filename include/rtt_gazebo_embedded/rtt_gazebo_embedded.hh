@@ -6,6 +6,7 @@
 #include <gazebo/common/common.hh>
 #include <gazebo/physics/physics.hh>
 #include <gazebo/sensors/sensors.hh>
+#include <gazebo/util/LogRecord.hh>
 
 // RTT headers
 #include <rtt/TaskContext.hpp>
@@ -120,7 +121,8 @@ private:
 			gazebo::math::Quaternion initial_q);
 	gazebo::math::Vector3 parseVector3(const std::string &str);
 	gazebo::math::Pose parsePose(const std::string &str);
-
+	
+	gazebo::util::LogRecord* recorder;
 };
 
 #endif
