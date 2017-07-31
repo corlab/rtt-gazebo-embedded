@@ -145,6 +145,9 @@ bool RTTGazeboEmbedded::configureHook() {
 	RTT::log(RTT::Info) << "Creating world at " << world_path << RTT::endlog();
 
 	try {
+		recorder = gazebo::util::LogRecord::Instance();
+		recorder->Init("gz-embedded-record");
+		
 		if (!gazebo::setupServer(argv)) {
 			RTT::log(RTT::Error) << "Could not setupServer " << RTT::endlog();
 			return false;
