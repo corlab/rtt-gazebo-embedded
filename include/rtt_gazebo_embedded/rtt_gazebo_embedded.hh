@@ -24,22 +24,25 @@
 
 #include <thread>
 
-class RTTGazeboEmbedded: public RTT::TaskContext {
-public:
-	RTTGazeboEmbedded(const std::string& name);
-	void addPlugin(const std::string& filename);
-	void setWorldFilePath(const std::string& file_path);
+class RTTGazeboEmbedded : public RTT::TaskContext
+{
+  public:
+	RTTGazeboEmbedded(const std::string &name);
+	void addPlugin(const std::string &filename);
+	void setWorldFilePath(const std::string &file_path);
 	bool configureHook();
-//    bool spawnModel(const std::string& instanceName, const std::string& modelName);
-	bool spawnModel(const std::string& instanceName,
-			const std::string& modelName, const int timeoutSec);
+	//    bool spawnModel(const std::string& instanceName, const std::string& modelName);
+	bool spawnModel(const std::string &instanceName,
+					const std::string &modelName, const int timeoutSec);
 
-	bool spawnModelAtPos(const std::string& instanceName,
-			const std::string& modelName, double x, double y, double z);
-	bool spawnModelAtPosition(const std::string& instanceName,
-			const std::string& modelName, rstrt::geometry::Translation t);
-	bool spawnModelAtPositionAndOrientation(const std::string& instanceName,
-			const std::string& modelName, rstrt::geometry::Translation t, rstrt::geometry::Rotation r);
+	bool spawnModelAtPos(const std::string &instanceName,
+						 const std::string &modelName, double x, double y, double z);
+	bool spawnModelAtPosition(const std::string &instanceName,
+							  const std::string &modelName, rstrt::geometry::Translation t);
+	bool spawnModelAtPositionAndOrientation(const std::string &instanceName,
+											const std::string &modelName, rstrt::geometry::Translation t, rstrt::geometry::Rotation r);
+	bool spawnModelAtPositionAndOrientationEuler(const std::string &instanceName,
+												 const std::string &modelName, rstrt::geometry::Translation t, const Eigen::VectorXf &rpy);
 
 	/**
 	 * Sets the initial configuration for a specific model that was spawned before.
@@ -49,14 +52,14 @@ public:
 	 *
 	 * returns		success or not
 	 */
-	bool setInitialConfigurationForModel(const std::string& instanceName,
-			const rstrt::kinematics::JointAngles& jointConfig);
+	bool setInitialConfigurationForModel(const std::string &instanceName,
+										 const rstrt::kinematics::JointAngles &jointConfig);
 
 	bool toggleDynamicsSimulation(const bool activate);
 
 	~RTTGazeboEmbedded();
 
-protected:
+  protected:
 	void WorldUpdateBegin();
 	void WorldUpdateEnd();
 	void OnPause(const bool _pause);
@@ -94,12 +97,14 @@ protected:
 	bool isWorldConfigured;
 
 	// Useful for threaded updates
-	struct ClientConnection {
-		ClientConnection() {
+	struct ClientConnection
+	{
+		ClientConnection()
+		{
 		}
 		ClientConnection(RTT::OperationCaller<void(void)> world_update_begin,
-				RTT::OperationCaller<void(void)> world_update_end) :
-				world_begin(world_update_begin), world_end(world_update_end) {
+						 RTT::OperationCaller<void(void)> world_update_end) : world_begin(world_update_begin), world_end(world_update_end)
+		{
 		}
 		RTT::OperationCaller<void(void)> world_begin;
 		RTT::OperationCaller<void(void)> world_end;
@@ -109,20 +114,20 @@ protected:
 
 	std::map<std::string, ClientConnection> client_map;
 
-private:
-	bool spawnModelInternal(const std::string& instanceName,
-			const std::string& modelName, const int timeoutSec, double x,
-			double y, double z, double roll, double pitch, double yaw);
-	void handleURDF(TiXmlElement* robotElement,
-			gazebo::math::Vector3 initial_xyz,
-			gazebo::math::Quaternion initial_q);
+  private:
+	bool spawnModelInternal(const std::string &instanceName,
+							const std::string &modelName, const int timeoutSec, double x,
+							double y, double z, double roll, double pitch, double yaw);
+	void handleURDF(TiXmlElement *robotElement,
+					gazebo::math::Vector3 initial_xyz,
+					gazebo::math::Quaternion initial_q);
 	void handleSDF(sdf::ElementPtr modelElement,
-			gazebo::math::Vector3 initial_xyz,
-			gazebo::math::Quaternion initial_q);
+				   gazebo::math::Vector3 initial_xyz,
+				   gazebo::math::Quaternion initial_q);
 	gazebo::math::Vector3 parseVector3(const std::string &str);
 	gazebo::math::Pose parsePose(const std::string &str);
-	
-	gazebo::util::LogRecord* recorder;
+
+	gazebo::util::LogRecord *recorder;
 };
 
 #endif
