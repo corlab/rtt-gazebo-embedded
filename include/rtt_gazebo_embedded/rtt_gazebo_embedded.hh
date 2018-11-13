@@ -114,13 +114,13 @@ private:
 			const std::string& modelName, const int timeoutSec, double x,
 			double y, double z, double roll, double pitch, double yaw);
 	void handleURDF(TiXmlElement* robotElement,
-			gazebo::math::Vector3 initial_xyz,
-			gazebo::math::Quaternion initial_q);
+            ignition::math::Vector3d initial_xyz,
+            ignition::math::Quaterniond initial_q);
 	void handleSDF(sdf::ElementPtr modelElement,
-			gazebo::math::Vector3 initial_xyz,
-			gazebo::math::Quaternion initial_q);
-	gazebo::math::Vector3 parseVector3(const std::string &str);
-	gazebo::math::Pose parsePose(const std::string &str);
+            ignition::math::Vector3d initial_xyz,
+            ignition::math::Quaterniond initial_q);
+    ignition::math::Vector3d parseVector3(const std::string &str);
+    ignition::math::Pose3d parsePose(const std::string &str);
 	
 	gazebo::util::LogRecord* recorder;
 };

@@ -1,5 +1,6 @@
 #include <rtt_gazebo_embedded/rtt_gazebo_embedded.hh>
 #include <boost/algorithm/string.hpp>
+#include <boost/lexical_cast.hpp>
 
 using namespace RTT;
 using namespace RTT::os;
@@ -136,8 +137,9 @@ bool RTTGazeboEmbedded::toggleDynamicsSimulation(const bool activate) {
 				<< "\x1B[33m[[--- You have to configure this component first! ---]]\033[0m"
 				<< std::endl;
 		return false;
-	}
-	world->EnablePhysicsEngine(activate);
+    }
+    //world->EnablePhysicsEngine(activate);
+    world->SetPhysicsEnabled(activate);
 	return true;
 }
 
@@ -157,9 +159,9 @@ bool RTTGazeboEmbedded::configureHook() {
 
 	world = gazebo::loadWorld(world_path);
 
-	gravity_vector[0] = world->GetPhysicsEngine()->GetGravity()[0];
-	gravity_vector[1] = world->GetPhysicsEngine()->GetGravity()[1];
-	gravity_vector[2] = world->GetPhysicsEngine()->GetGravity()[2];
+    gravity_vector[0] = world->Gravity()[0];
+    gravity_vector[1] = world->Gravity()[1];
+    gravity_vector[2] = world->Gravity()[2];
 
 	isWorldConfigured = true;
 
@@ -193,30 +195,30 @@ void RTTGazeboEmbedded::OnPause(const bool _pause) {
 
 bool RTTGazeboEmbedded::spawnModel(const std::string& instanceName,
 		const std::string& modelName, const int timeoutSec) {
-	gazebo::math::Quaternion initial_q(1, 0, 0, 0);
-	gazebo::math::Vector3 rpy = initial_q.GetAsEuler();
-	return spawnModelInternal(instanceName, modelName, timeoutSec, 0.0, 0.0, 0.0, rpy.x, rpy.y, rpy.z);
+    ignition::math::Quaterniond initial_q(1, 0, 0, 0);
+    ignition::math::Vector3d rpy = initial_q.Euler();
+    return spawnModelInternal(instanceName, modelName, timeoutSec, 0.0, 0.0, 0.0, rpy.X(), rpy.Y(), rpy.Z());
 }
 
 bool RTTGazeboEmbedded::spawnModelAtPos(const std::string& instanceName,
 		const std::string& modelName, double x, double y, double z) {
-	gazebo::math::Quaternion initial_q(1, 0, 0, 0);
-	gazebo::math::Vector3 rpy = initial_q.GetAsEuler();
-	return spawnModelInternal(instanceName, modelName, 10, x, y, z, rpy.x, rpy.y, rpy.z);
+    ignition::math::Quaterniond initial_q(1, 0, 0, 0);
+    ignition::math::Vector3d rpy = initial_q.Euler();
+    return spawnModelInternal(instanceName, modelName, 10, x, y, z, rpy.X(), rpy.Y(), rpy.Z());
 }
 
 bool RTTGazeboEmbedded::spawnModelAtPosition(const std::string& instanceName,
 		const std::string& modelName, rstrt::geometry::Translation t) {
-	gazebo::math::Quaternion initial_q(1, 0, 0, 0);
-	gazebo::math::Vector3 rpy = initial_q.GetAsEuler();
-	return spawnModelInternal(instanceName, modelName, 10, t.translation(0), t.translation(1), t.translation(2), rpy.x, rpy.y, rpy.z);
+    ignition::math::Quaterniond initial_q(1, 0, 0, 0);
+    ignition::math::Vector3d rpy = initial_q.Euler();
+    return spawnModelInternal(instanceName, modelName, 10, t.translation(0), t.translation(1), t.translation(2), rpy.X(), rpy.Y(), rpy.Z());
 }
 
 bool RTTGazeboEmbedded::spawnModelAtPositionAndOrientation(const std::string& instanceName,
 		const std::string& modelName, rstrt::geometry::Translation t, rstrt::geometry::Rotation r) {
-	gazebo::math::Quaternion initial_q(r.rotation(0), r.rotation(1), r.rotation(2), r.rotation(3));
-	gazebo::math::Vector3 rpy = initial_q.GetAsEuler();
-	return spawnModelInternal(instanceName, modelName, 10, t.translation(0), t.translation(1), t.translation(2), rpy.x, rpy.y, rpy.z);
+    ignition::math::Quaterniond initial_q(r.rotation(0), r.rotation(1), r.rotation(2), r.rotation(3));
+    ignition::math::Vector3d rpy = initial_q.Euler();
+    return spawnModelInternal(instanceName, modelName, 10, t.translation(0), t.translation(1), t.translation(2), rpy.X(), rpy.Y(), rpy.Z());
 }
 
 bool RTTGazeboEmbedded::setInitialConfigurationForModel(
@@ -224,7 +226,7 @@ bool RTTGazeboEmbedded::setInitialConfigurationForModel(
 		const rstrt::kinematics::JointAngles& jointConfig) {
 	// check if model was spawned
 	gazebo::physics::ModelPtr model;
-	if (!(model = world->GetModel(instanceName))) {
+    if (!(model = world->ModelByName(instanceName))) {
 		RTT::log(RTT::Warning)
 				<< "Model could not be found. Perhaps it was not loaded at all before. Try using the spawn_model call."
 				<< RTT::endlog();
@@ -242,7 +244,7 @@ bool RTTGazeboEmbedded::setInitialConfigurationForModel(
 		this->stop();
 	}
 	// disable physics
-	bool turnPhysicsOnAfterwards = world->GetEnablePhysicsEngine();
+    bool turnPhysicsOnAfterwards = world->PhysicsEnabled();
 	if (turnPhysicsOnAfterwards) {
 		toggleDynamicsSimulation(false);
 	}
@@ -256,7 +258,7 @@ bool RTTGazeboEmbedded::setInitialConfigurationForModel(
              for (gazebo::physics::Joint_V::iterator jit = gazebo_joints_.begin();
                 jit != gazebo_joints_.end(); ++jit) {
                           const std::string name = (*jit)->GetName();
-                          if ((*jit)->GetLowerLimit(0u) == (*jit)->GetUpperLimit(0u)) {
+                          if ((*jit)->LowerLimit(0u) == (*jit)->UpperLimit(0u)) {
                                 continue;
                           }
                           count++;
@@ -270,7 +272,7 @@ bool RTTGazeboEmbedded::setInitialConfigurationForModel(
 			const std::string name = (*jit)->GetName();
 
 
-                          if ((*jit)->GetLowerLimit(0u) == (*jit)->GetUpperLimit(0u)) {
+                          if ((*jit)->LowerLimit(0u) == (*jit)->UpperLimit(0u)) {
                                 RTT::log(RTT::Info) << "Not adding (fake) fixed joint ["
                                 << name << "] j:" << j << RTT::endlog();
                                 continue;
@@ -292,7 +294,7 @@ bool RTTGazeboEmbedded::setInitialConfigurationForModel(
                 for (gazebo::physics::Joint_V::iterator jit = gazebo_joints_.begin();
                 jit != gazebo_joints_.end(); ++jit) {
                           const std::string name = (*jit)->GetName();
-                          if ((*jit)->GetLowerLimit(0u) == (*jit)->GetUpperLimit(0u)) {
+                          if ((*jit)->LowerLimit(0u) == (*jit)->UpperLimit(0u)) {
                                 continue;
                           }
                           RTT::log(RTT::Warning) << "Set Joint: " << name << RTT::endlog();
@@ -320,8 +322,8 @@ bool RTTGazeboEmbedded::spawnModelInternal(const std::string& instanceName,
 		return false;
 	}
 
-	gazebo::math::Vector3 initial_xyz(x, y, z);
-	gazebo::math::Quaternion initial_q(roll, pitch, yaw);
+    ignition::math::Vector3d initial_xyz(x, y, z);
+    ignition::math::Quaterniond initial_q(roll, pitch, yaw);
 
 	//
 	//	gazebo::common::ModelDatabase* modelDatabaseInst =
@@ -412,7 +414,7 @@ bool RTTGazeboEmbedded::spawnModelInternal(const std::string& instanceName,
 
 		{
 			//boost::recursive_mutex::scoped_lock lock(*world->GetMRMutex());
-			if (world->GetModel(instanceName)) {
+            if (world->ModelByName(instanceName)) {
 				modelDeployTimer->Stop();
 				break;
 			}
@@ -425,12 +427,12 @@ bool RTTGazeboEmbedded::spawnModelInternal(const std::string& instanceName,
 }
 
 void RTTGazeboEmbedded::handleSDF(sdf::ElementPtr modelElement,
-		gazebo::math::Vector3 initial_xyz, gazebo::math::Quaternion initial_q) {
+        ignition::math::Vector3d initial_xyz, ignition::math::Quaterniond initial_q) {
 	sdf::ElementPtr pose_element;
 
 	// Check for the pose element
 	pose_element = modelElement->GetElement("pose");
-	gazebo::math::Pose model_pose;
+    ignition::math::Pose3d model_pose;
 
 	// Create the pose element if it doesn't exist
 	// Remove it if it exists, since we are inserting a new one
@@ -441,15 +443,15 @@ void RTTGazeboEmbedded::handleSDF(sdf::ElementPtr modelElement,
 	}
 
 	// add pose_element Pose to initial pose
-	gazebo::math::Pose new_model_pose = model_pose
-			+ gazebo::math::Pose(initial_xyz, initial_q);
+    ignition::math::Pose3d new_model_pose = model_pose
+            + ignition::math::Pose3d(initial_xyz, initial_q);
 
 	// Create the string of 6 numbers
 	std::ostringstream pose_stream;
-	gazebo::math::Vector3 model_rpy = model_pose.rot.GetAsEuler(); // convert to Euler angles for Gazebo XML
-	pose_stream << model_pose.pos.x << " " << model_pose.pos.y << " "
-			<< model_pose.pos.z << " " << model_rpy.x << " " << model_rpy.y
-			<< " " << model_rpy.z;
+    ignition::math::Vector3d model_rpy = model_pose.Rot().Euler(); // convert to Euler angles for Gazebo XML
+    pose_stream << model_pose.Pos().X() << " " << model_pose.Pos().Y() << " "
+            << model_pose.Pos().Z() << " " << model_rpy.X() << " " << model_rpy.Y()
+            << " " << model_rpy.Z();
 
 	// Add value to pose element
 //	TiXmlText* text = new TiXmlText(pose_stream.str());
@@ -461,7 +463,7 @@ void RTTGazeboEmbedded::handleSDF(sdf::ElementPtr modelElement,
 //	modelElement->InsertElement(new_pose_element);
 }
 
-gazebo::math::Pose RTTGazeboEmbedded::parsePose(const string &str) {
+ignition::math::Pose3d RTTGazeboEmbedded::parsePose(const string &str) {
 	std::vector<std::string> pieces;
 	std::vector<double> vals;
 
@@ -474,23 +476,23 @@ gazebo::math::Pose RTTGazeboEmbedded::parsePose(const string &str) {
 				log(Error) << "xml key [" << str << "][" << i << "] value ["
 						<< pieces[i] << "] is not a valid double from a 3-tuple"
 						<< endlog();
-				return gazebo::math::Pose();
+                return ignition::math::Pose3d();
 			}
 		}
 	}
 
 	if (vals.size() == 6)
-		return gazebo::math::Pose(vals[0], vals[1], vals[2], vals[3], vals[4],
+        return ignition::math::Pose3d(vals[0], vals[1], vals[2], vals[3], vals[4],
 				vals[5]);
 	else {
 		log(Error) << "Beware: failed to parse string " << str.c_str()
-				<< " as gazebo::math::Pose, returning zeros." << endlog();
-		return gazebo::math::Pose();
+                << " as ignition::math::Pose3d, returning zeros." << endlog();
+        return ignition::math::Pose3d();
 	}
 }
 
 void RTTGazeboEmbedded::handleURDF(TiXmlElement* robotElement,
-		gazebo::math::Vector3 initial_xyz, gazebo::math::Quaternion initial_q) {
+        ignition::math::Vector3d initial_xyz, ignition::math::Quaterniond initial_q) {
 	// find first instance of xyz and rpy, replace with initial pose
 	TiXmlElement* origin_key = robotElement->FirstChildElement("origin");
 
@@ -500,8 +502,8 @@ void RTTGazeboEmbedded::handleURDF(TiXmlElement* robotElement,
 		robotElement->LinkEndChild(origin_key);
 	}
 
-	gazebo::math::Vector3 xyz;
-	gazebo::math::Vector3 rpy;
+    ignition::math::Vector3d xyz;
+    ignition::math::Vector3d rpy;
 	if (origin_key->Attribute("xyz")) {
 		xyz = this->parseVector3(origin_key->Attribute("xyz"));
 		origin_key->RemoveAttribute("xyz");
@@ -512,22 +514,22 @@ void RTTGazeboEmbedded::handleURDF(TiXmlElement* robotElement,
 	}
 
 	// add xyz, rpy to initial pose
-	gazebo::math::Pose model_pose = gazebo::math::Pose(xyz, rpy)
-			+ gazebo::math::Pose(initial_xyz, initial_q);
+    ignition::math::Pose3d model_pose = ignition::math::Pose3d(xyz[0],xyz[1],xyz[2], rpy[0], rpy[1], rpy[2])
+            + ignition::math::Pose3d(initial_xyz, initial_q);
 
 	std::ostringstream xyz_stream;
-	xyz_stream << model_pose.pos.x << " " << model_pose.pos.y << " "
-			<< model_pose.pos.z;
+    xyz_stream << model_pose.Pos().X() << " " << model_pose.Pos().Y() << " "
+            << model_pose.Pos().Z();
 
 	std::ostringstream rpy_stream;
-	gazebo::math::Vector3 model_rpy = model_pose.rot.GetAsEuler(); // convert to Euler angles for URDF/SDF XML
-	rpy_stream << model_rpy.x << " " << model_rpy.y << " " << model_rpy.z;
+    ignition::math::Vector3d model_rpy = model_pose.Rot().Euler(); // convert to Euler angles for URDF/SDF XML
+    rpy_stream << model_rpy.X() << " " << model_rpy.Y() << " " << model_rpy.Z();
 
 	origin_key->SetAttribute("xyz", xyz_stream.str());
 	origin_key->SetAttribute("rpy", rpy_stream.str());
 }
 
-gazebo::math::Vector3 RTTGazeboEmbedded::parseVector3(const string &str) {
+ignition::math::Vector3d RTTGazeboEmbedded::parseVector3(const string &str) {
 	std::vector<std::string> pieces;
 	std::vector<double> vals;
 
@@ -540,17 +542,17 @@ gazebo::math::Vector3 RTTGazeboEmbedded::parseVector3(const string &str) {
 				log(Error) << "xml key [" << str << "][" << i << "] value ["
 						<< pieces[i] << "] is not a valid double from a 3-tuple"
 						<< endlog();
-				return gazebo::math::Vector3();
+                return ignition::math::Vector3d();
 			}
 		}
 	}
 
 	if (vals.size() == 3)
-		return gazebo::math::Vector3(vals[0], vals[1], vals[2]);
+        return ignition::math::Vector3d(vals[0], vals[1], vals[2]);
 	else {
 		log(Warning) << "Beware: failed to parse string " << str.c_str()
-				<< " as gazebo::math::Vector3, returning zeros." << endlog();
-		return gazebo::math::Vector3();
+                << " as ignition::math::Vector3d, returning zeros." << endlog();
+        return ignition::math::Vector3d();
 	}
 }
 

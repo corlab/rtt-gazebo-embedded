@@ -20,7 +20,7 @@ public:
 
     bool configureHook()
     {
-        model = gazebo::physics::get_world()->GetModel(getName());
+        model = gazebo::physics::get_world()->ModelByName(getName());
         
         return bool(model);
     }
