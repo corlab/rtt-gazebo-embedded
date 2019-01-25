@@ -122,10 +122,30 @@ RTTGazeboEmbedded::RTTGazeboEmbedded(const std::string &name) : TaskContext(name
 			 "spawning position")
 		.arg("rpy", "euler roll, pitch, yaw");
 
+	this->addOperation("joinLinksFixed",
+					   &RTTGazeboEmbedded::joinLinksFixed, this, RTT::OwnThread)
+		.doc(
+			"Joining two links together with a fixed joint.")
+		.arg("modelName1", "first model name")
+		.arg("linkName1", "link name of the first model")
+		.arg("modelName2", "second model name")
+		.arg("linkName2", "link name of the second model");
+
+	this->addOperation("detachLinks",
+					   &RTTGazeboEmbedded::detachLinks, this, RTT::OwnThread)
+		.doc(
+			"Detaches previously joined links.")
+		.arg("modelName1", "first model name")
+		.arg("linkName1", "link name of the first model")
+		.arg("modelName2", "second model name")
+		.arg("linkName2", "link name of the second model");
+
 	gazebo::printVersion();
 #ifdef GAZEBO_GREATER_6
 	gazebo::common::Console::SetQuiet(false);
 #endif
+
+	this->joints.clear();
 }
 
 void RTTGazeboEmbedded::addPlugin(const std::string &filename)
@@ -247,6 +267,149 @@ void RTTGazeboEmbedded::OnPause(const bool _pause)
 		}
 	}
 }
+
+// <<< https://github.com/pal-robotics/gazebo_ros_link_attacher
+bool RTTGazeboEmbedded::joinLinksFixed(const std::string &modelName1, const std::string &linkName1,
+									   const std::string &modelName2, const std::string &linkName2)
+{
+	// look for any previous instance of the joint first.
+	// if we try to create a joint in between two links
+	// more than once (even deleting any reference to the first one)
+	// gazebo hangs/crashes
+	fixedJoint j;
+	if (this->getJoint(modelName1, linkName1, modelName2, linkName2, j))
+	{
+		RTT::log(RTT::Warning) << "Joint already existed, reusing it." << RTT::endlog();
+		j.joint->Attach(j.l1, j.l2);
+		return true;
+	}
+	else
+	{
+		RTT::log(RTT::Debug) << "Creating new joint." << RTT::endlog();
+	}
+	j.model1 = modelName1;
+	j.link1 = linkName1;
+	j.model2 = modelName2;
+	j.link2 = linkName2;
+	RTT::log(RTT::Debug) << "Getting BasePtr of " << modelName1 << RTT::endlog();
+	gazebo::physics::BasePtr b1 = this->world->GetByName(modelName1);
+	if (b1 == NULL)
+	{
+		RTT::log(RTT::Error) << modelName1 << " model was not found" << RTT::endlog();
+		return false;
+	}
+	RTT::log(RTT::Debug) << "Getting BasePtr of " << modelName2 << RTT::endlog();
+	gazebo::physics::BasePtr b2 = this->world->GetByName(modelName2);
+	if (b2 == NULL)
+	{
+		RTT::log(RTT::Error) << modelName2 << " model was not found" << RTT::endlog();
+		return false;
+	}
+
+	RTT::log(RTT::Debug) << "Casting into ModelPtr" << RTT::endlog();
+	gazebo::physics::ModelPtr m1(dynamic_cast<gazebo::physics::Model *>(b1.get()));
+	j.m1 = m1;
+	gazebo::physics::ModelPtr m2(dynamic_cast<gazebo::physics::Model *>(b2.get()));
+	j.m2 = m2;
+
+	RTT::log(RTT::Debug) << "Getting link: '" << linkName1 << "' from model: '" << modelName1 << "'" << RTT::endlog();
+	gazebo::physics::LinkPtr l1 = m1->GetLink(linkName1);
+	if (l1 == NULL)
+	{
+		RTT::log(RTT::Error) << linkName1 << " link was not found" << RTT::endlog();
+		return false;
+	}
+	if (l1->GetInertial() == NULL)
+	{
+		RTT::log(RTT::Error) << "link1 inertia is NULL!" << RTT::endlog();
+	}
+	else
+		RTT::log(RTT::Debug) << "link1 inertia is not NULL, for example, mass is: " << l1->GetInertial()->GetMass() << RTT::endlog();
+	j.l1 = l1;
+	RTT::log(RTT::Debug) << "Getting link: '" << linkName2 << "' from model: '" << modelName2 << "'" << RTT::endlog();
+	gazebo::physics::LinkPtr l2 = m2->GetLink(linkName2);
+	if (l2 == NULL)
+	{
+		RTT::log(RTT::Error) << linkName2 << " link was not found" << RTT::endlog();
+		return false;
+	}
+	if (l2->GetInertial() == NULL)
+	{
+		RTT::log(RTT::Error) << "link2 inertia is NULL!" << RTT::endlog();
+	}
+	else
+		RTT::log(RTT::Debug) << "link2 inertia is not NULL, for example, mass is: " << l2->GetInertial()->GetMass() << RTT::endlog();
+	j.l2 = l2;
+
+	RTT::log(RTT::Debug) << "Links are: " << l1->GetName() << " and " << l2->GetName() << RTT::endlog();
+
+	RTT::log(RTT::Debug) << "Creating revolute joint on model: '" << modelName1 << "'" << RTT::endlog();
+	j.joint = world->GetPhysicsEngine()->CreateJoint("revolute", m1);
+	this->joints.push_back(j);
+
+	RTT::log(RTT::Debug) << "Attach" << RTT::endlog();
+	j.joint->Attach(l1, l2);
+	RTT::log(RTT::Debug) << "Loading links" << RTT::endlog();
+	j.joint->Load(l1, l2, gazebo::math::Pose());
+	RTT::log(RTT::Debug) << "SetModel" << RTT::endlog();
+	j.joint->SetModel(m2);
+	/*
+     * If SetModel is not done we get:
+     * ***** Internal Program Error - assertion (this->GetParentModel() != __null)
+     failed in void gazebo::physics::Entity::PublishPose():
+     /tmp/buildd/gazebo2-2.2.3/gazebo/physics/Entity.cc(225):
+     An entity without a parent model should not happen
+     * If SetModel is given the same model than CreateJoint given
+     * Gazebo crashes with
+     * ***** Internal Program Error - assertion (self->inertial != __null)
+     failed in static void gazebo::physics::ODELink::MoveCallback(dBodyID):
+     /tmp/buildd/gazebo2-2.2.3/gazebo/physics/ode/ODELink.cc(183): Inertial pointer is NULL
+     */
+
+	// Perhaps wait till setModel is done: polling?
+
+	RTT::log(RTT::Debug) << "SetHightstop" << RTT::endlog();
+	j.joint->SetHighStop(0, 0);
+	RTT::log(RTT::Debug) << "SetLowStop" << RTT::endlog();
+	j.joint->SetLowStop(0, 0);
+	RTT::log(RTT::Debug) << "Init" << RTT::endlog();
+	j.joint->Init();
+	RTT::log(RTT::Debug) << "Attach finished." << RTT::endlog();
+
+	return true;
+}
+
+bool RTTGazeboEmbedded::getJoint(std::string modelName1, std::string linkName1,
+								 std::string modelName2, std::string linkName2,
+								 fixedJoint &joint)
+{
+	fixedJoint j;
+	for (std::vector<fixedJoint>::iterator it = this->joints.begin(); it != this->joints.end(); ++it)
+	{
+		j = *it;
+		if ((j.model1.compare(modelName1) == 0) && (j.model2.compare(modelName2) == 0) && (j.link1.compare(linkName1) == 0) && (j.link2.compare(linkName2) == 0))
+		{
+			joint = j;
+			return true;
+		}
+	}
+	return false;
+}
+
+bool RTTGazeboEmbedded::detachLinks(const std::string &modelName1, const std::string &linkName1,
+									const std::string &modelName2, const std::string &linkName2)
+{
+	// search for the instance of joint and do detach
+	fixedJoint j;
+	if (this->getJoint(modelName1, linkName1, modelName2, linkName2, j))
+	{
+		j.joint->Detach();
+		return true;
+	}
+
+	return false;
+}
+// https://github.com/pal-robotics/gazebo_ros_link_attacher >>>
 
 bool RTTGazeboEmbedded::spawnModel(const std::string &instanceName,
 								   const std::string &modelName, const int timeoutSec)

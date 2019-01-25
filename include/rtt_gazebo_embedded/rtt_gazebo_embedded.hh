@@ -57,6 +57,11 @@ class RTTGazeboEmbedded : public RTT::TaskContext
 
 	bool toggleDynamicsSimulation(const bool activate);
 
+	bool joinLinksFixed(const std::string &modelName1, const std::string &linkName1,
+						const std::string &modelName2, const std::string &linkName2);
+	bool detachLinks(const std::string &modelName1, const std::string &linkName1,
+					 const std::string &modelName2, const std::string &linkName2);
+
 	~RTTGazeboEmbedded();
 
   protected:
@@ -96,6 +101,21 @@ class RTTGazeboEmbedded : public RTT::TaskContext
 
 	bool isWorldConfigured;
 
+	/// \brief Internal representation of a fixed joint from https://github.com/pal-robotics/gazebo_ros_link_attacher
+	struct fixedJoint
+	{
+		std::string model1;
+		gazebo::physics::ModelPtr m1;
+		std::string link1;
+		gazebo::physics::LinkPtr l1;
+		std::string model2;
+		gazebo::physics::ModelPtr m2;
+		std::string link2;
+		gazebo::physics::LinkPtr l2;
+		gazebo::physics::JointPtr joint;
+	};
+	std::vector<fixedJoint> joints;
+
 	// Useful for threaded updates
 	struct ClientConnection
 	{
@@ -126,6 +146,10 @@ class RTTGazeboEmbedded : public RTT::TaskContext
 				   gazebo::math::Quaternion initial_q);
 	gazebo::math::Vector3 parseVector3(const std::string &str);
 	gazebo::math::Pose parsePose(const std::string &str);
+
+	bool getJoint(std::string model1, std::string link1,
+				  std::string model2, std::string link2,
+				  fixedJoint &joint);
 
 	gazebo::util::LogRecord *recorder;
 };
