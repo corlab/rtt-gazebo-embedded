@@ -140,6 +140,14 @@ RTTGazeboEmbedded::RTTGazeboEmbedded(const std::string &name) : TaskContext(name
 		.arg("modelName2", "second model name")
 		.arg("linkName2", "link name of the second model");
 
+	this->addOperation("setGravityVector",
+					   &RTTGazeboEmbedded::setGravityVector, this, RTT::OwnThread)
+		.doc(
+			"Set the gravity vector for the physics engine.")
+		.arg("x", "World X axis")
+		.arg("y", "World Y axis")
+		.arg("z", "World Z axis");
+
 	gazebo::printVersion();
 #ifdef GAZEBO_GREATER_6
 	gazebo::common::Console::SetQuiet(false);
@@ -205,6 +213,32 @@ bool RTTGazeboEmbedded::toggleDynamicsSimulation(const bool activate)
 	}
 	world->EnablePhysicsEngine(activate);
 	return true;
+}
+
+bool RTTGazeboEmbedded::setGravityVector(const double x, const double y, const double z)
+{
+	if (world)
+	{
+		gazebo::math::Vector3 gravity_new(x, y, z);
+		RTT::log(RTT::Info) << "Changing gravity vector to (" << gravity_new.x << ", " << gravity_new.y << ", " << gravity_new.z << ")" << RTT::endlog();
+
+		world->GetPhysicsEngine()->SetGravity(gravity_new);
+		gazebo::math::Vector3 gravity_cur = world->GetPhysicsEngine()->GetGravity();
+		if (gravity_new == gravity_cur)
+		{
+			RTT::log(RTT::Info) << "Gravity vector changed." << RTT::endlog();
+			return true;
+		}
+		else
+		{
+			RTT::log(RTT::Info) << "Could not change the gravity vector." << RTT::endlog();
+		}
+	}
+	else
+	{
+		RTT::log(RTT::Error) << "Cannot access the world." << RTT::endlog();
+	}
+	return false;
 }
 
 bool RTTGazeboEmbedded::configureHook()

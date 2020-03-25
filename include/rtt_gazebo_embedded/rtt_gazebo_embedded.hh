@@ -62,6 +62,8 @@ class RTTGazeboEmbedded : public RTT::TaskContext
 	bool detachLinks(const std::string &modelName1, const std::string &linkName1,
 					 const std::string &modelName2, const std::string &linkName2);
 
+	bool setGravityVector(const double x, const double y, const double z);
+
 	~RTTGazeboEmbedded();
 
   protected:
